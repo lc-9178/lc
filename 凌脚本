@@ -1,0 +1,514 @@
+local moversion = 'none'
+local gamename = 'tang'
+--//定义部分
+local library = loadstring(game:HttpGet('https://pastebin.com/raw/KpJ6BTDi'))()
+local Services = loadstring(game:HttpGet('https://pastebin.com/raw/sdciknwh'))()
+local Utility = loadstring(game:HttpGet('https://pastebin.com/raw/Ktx2Njie'))()
+local Maid = loadstring(game:HttpGet('https://pastebin.com/raw/ATRf9jDy'))()
+local ControlModule = loadstring(game:HttpGet('https://pastebin.com/raw/pJLVDTvf'))()
+
+local Players,RunService,UserInputService,Lighting = Services:Get('Players','RunService','UserInputService','Lighting')
+local maid = Maid.new()
+
+local lp = Players.LocalPlayer
+local char = lp.Character or lp.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+local hum = char:WaitForChild("Humanoid")
+local cjumpvalue
+local djumpvalue
+
+if hum.UseJumpPower == true then
+    cjumpvalue = 'JumpPower'
+    djumpvalue = 50
+else
+    cjumpvalue = 'JumpHeight'
+    djumpvalue = 7
+end
+
+local functions = {}
+
+do --//玩家功能部分
+	function functions.speedHack(toggle)
+		if (not toggle) then
+			maid.speedHack = nil;
+			maid.speedHackBv = nil;
+
+			return;
+		end;
+
+		maid.speedHack = RunService.Heartbeat:Connect(function()
+			local playerData = Utility:getPlayerData()
+			local humanoid, rootPart = playerData.humanoid, playerData.primaryPart;
+			if (not humanoid or not rootPart) then return end;
+
+			maid.speedHackBv = maid.speedHackBv or Instance.new('BodyVelocity');
+			maid.speedHackBv.MaxForce = Vector3.new(100000, 0, 100000);
+
+			maid.speedHackBv.Parent = rootPart or nil;
+			maid.speedHackBv.Velocity = (humanoid.MoveDirection.Magnitude ~= 0 and humanoid.MoveDirection or gethiddenproperty(humanoid, 'WalkDirection')) * library.Flags.speedHackValue.CurrentValue;
+		end);
+	end;
+
+    function functions.infiniteJump(toggle)
+        if (not toggle) then
+            maid.infjump = nil
+        end
+
+        maid.infjump = UserInputService.JumpRequest:Connect(function()
+            local playerData = Utility:getPlayerData()
+            local rootPart,humanoid = playerData.rootPart,playerData.humanoid
+            if rootPart and library.Flags.infiniteJump.CurrentValue then
+                humanoid[cjumpvalue] = library.Flags.infiniteJumpHeight.CurrentValue
+                humanoid:ChangeState("Jumping")
+            else
+                humanoid[cjumpvalue] = djumpvalue
+                maid.infjump = nil
+            end
+        end)
+    end;
+    
+    function functions.noClip(toggle)
+        if (not toggle or not library.Flags.noclip.CurrentValue) then
+            maid.noClip = nil
+    
+            local humanoid = Utility:getPlayerData().humanoid
+            if (not humanoid) then return end
+    
+            humanoid:ChangeState('Physics')
+            task.wait()
+            humanoid:ChangeState('RunningNoPhysics')
+    
+            return
+        end
+    
+        maid.noClip = RunService.Stepped:Connect(function()
+            local myCharacterParts = Utility:getPlayerData().parts
+    
+            for _, v in next, myCharacterParts do
+                v.CanCollide = false
+            end
+        end)
+    end
+    
+    local lastFogDensity = 0
+
+    function functions.noFog(t)
+        if not t then Lighting.Atmosphere.Density = lastFogDensity; maid.noFog = nil; return; end
+    
+        maid.noFog = Lighting.Atmosphere:GetPropertyChangedSignal('Density'):Connect(function()
+            Lighting.Atmosphere.Density = 0;
+        end);
+    
+        lastFogDensity = Lighting.Atmosphere.Density;
+        Lighting.Atmosphere.Density = 0;
+    end
+    
+    function functions.noBlur(t)
+        local dof = Lighting.DepthOfField;
+        if not t then maid.noBlur = nil; dof.Enabled = true; return; end
+    
+        maid.noBlur = Lighting.DepthOfField:GetPropertyChangedSignal('Enabled'):Connect(function()
+            if not dof.Enabled then return; end
+            dof.Enabled = false;
+        end);
+    
+        dof.Enabled = false;
+    end
+    
+    local oldAmbient, oldBritghtness = Lighting.Ambient, Lighting.Brightness;
+    
+    function functions.fullBright(toggle)
+        if(not toggle) then
+            maid.fullBright = nil;
+            Lighting.Ambient, Lighting.Brightness = oldAmbient, oldBritghtness;
+            return
+        end;
+    
+        oldAmbient, oldBritghtness = Lighting.Ambient, Lighting.Brightness;
+        maid.fullBright = Lighting:GetPropertyChangedSignal('Ambient'):Connect(function()
+            Lighting.Ambient = Color3.fromRGB(255, 255, 255);
+            Lighting.Brightness = 1;
+        end);
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255);
+    end;
+end
+
+do--//辅助函数部分
+    function functions.simulateTouch(part)
+        if part and part:IsA("BasePart") then
+            firetouchinterest(root, part, 0)
+            firetouchinterest(root, part, 1)
+        end
+    end
+    
+    function functions.changeteam(a)
+        if tostring(game:GetService("Players").LocalPlayer.Team) ~= a then
+            repeat
+                game:GetService("ReplicatedStorage"):WaitForChild("TeamSwitch"):FireServer(a)
+                task.wait()
+            until tostring(game:GetService("Players").LocalPlayer.Team) == a
+        end
+    end
+    
+    function functions.getbox()
+        if not char:FindFirstChild("Delivery Box") and not lp.Backpack:FindFirstChild('Delivery Box') then
+            for i,v in next,game.Workspace.DeliverySys.Misc:GetChildren() do
+                if v:FindFirstChild('ClickDetector') then
+                    fireclickdetector(v:WaitForChild('ClickDetector'),1)
+                    fireclickdetector(v:WaitForChild('ClickDetector'),0)
+                    break
+                end
+            end
+        end
+    end
+    
+    function functions.geticecream()
+        if not workspace.MixueJob.Scripted.Prompts.PromptFill.ProximityPrompt.Enabled then
+            fireproximityprompt(game.Workspace.MixueJob.Scripted.Prompts.Prompt.ProximityPrompt)
+        else
+            fireproximityprompt(game.Workspace.MixueJob.Scripted.Prompts.PromptFill.ProximityPrompt)
+        end
+    end
+
+    function functions.getcoffee()
+        if not game.Workspace.BaristaJob.Scripted.Prompts.PromptFill.ProximityPrompt.Enabled then
+            fireproximityprompt(game.Workspace.BaristaJob.Scripted.Prompts.Prompt.ProximityPrompt)
+        else
+            fireproximityprompt(game.Workspace.BaristaJob.Scripted.Prompts.PromptFill.ProximityPrompt)
+        end
+    end
+    
+    function functions.equipthings(a)
+        if not char:FindFirstChild(a) and lp.Backpack:FindFirstChild(a) then
+            hum:EquipTool(lp.Backpack:WaitForChild(a))
+        end
+    end
+    
+    function functions.unequipthings(a)
+        if char:FindFirstChild(a) and not lp.Backpack:FindFirstChild(a) then
+            hum:UnequipTools(char:WaitForChild(a))
+        end
+    end
+
+    function functions.getbaozi()
+        for i,v in next,game.Workspace.MapsParts.MessyStuff.MessyStuff:GetChildren() do
+            if v:FindFirstChild('BunGiver') then
+                fireproximityprompt(v.BunGiver.ProximityPrompt)
+            end
+        end
+    end
+end
+
+do--//主功能部分
+    function functions.autohorn(toggle)
+        while true do
+            if not toggle or not library.Flags.autohorn.CurrentValue then break end
+            if game.Workspace:WaitForChild("SpawnedCars"):FindFirstChild(lp.Name.."'s Car") then
+                game.Workspace:WaitForChild("SpawnedCars"):WaitForChild(lp.Name.."'s Car"):WaitForChild("Horn"):FireServer("Horn",true)
+            end
+            task.wait(1)
+        end
+    end
+    function functions.fireworkonhand(toggle)
+        if not toggle then
+            maid.fireworkonhand = nil
+            return
+        end
+
+        maid.fireworkonhand = RunService.Stepped:Connect(function()
+            if char:FindFirstChild('Firework') then
+                fireproximityprompt(char:WaitForChild('Firework').Extra.EffectPart.PromptAttachment.ProximityPrompt)
+            end
+        end)
+    end
+
+    function functions.autofirework(toggle)
+        if not toggle then
+            maid.autofirework = nil
+            return
+        end
+
+        maid.autofirework = RunService.Stepped:Connect(function()
+            if game.Workspace["CNY Assests"].Fireworks then
+                for i,v in next,game.Workspace["CNY Assests"].Fireworks:GetChildren() do
+                    if v:FindFirstChild('EffectPart') and v:FindFirstChild('EffectPart').PromptAttachment.ProximityPrompt.Enabled == true then
+                        fireproximityprompt(v.EffectPart.PromptAttachment.ProximityPrompt)
+                    end
+                end
+            end
+            if game.Workspace.FireworkModel then
+                for i,v in next,game.Workspace.FireworkModel:GetChildren() do
+                    if v:FindFirstChild('Extra') and v:FindFirstChild('Extra'):FindFirstChild('EffectPart') and v:FindFirstChild('Extra'):FindFirstChild('EffectPart').PromptAttachment.ProximityPrompt.Enabled == true then
+                        fireproximityprompt(v.Extra.EffectPart.PromptAttachment.ProximityPrompt)
+                    end
+                end
+            end
+        end)
+    end   
+    
+    function functions.autofarmbox(toggle)
+        if not toggle then
+            return
+        end
+
+        while true do
+            if not toggle or not library.Flags.autofarmbox.CurrentValue then break end
+            functions.changeteam('Delivery Driver')
+            functions.getbox()
+            task.wait(15)
+            for i,v in next,game.Workspace.DeliverySys.DeliveryPoints:GetChildren() do
+                if v:FindFirstChild('TouchInterest') and v.Locate.Locate.Enabled == true then
+                    repeat
+                        task.wait()
+                        tpl = v.CFrame
+                        functions.equipthings("Delivery Box")
+                        root.CFrame = tpl
+                        functions.simulateTouch(v)
+                        functions.unequipthings("Delivery Box")
+                    until not v:FindFirstChild('TouchInterest') and not v.Locate.Locate.Enabled == true
+                end
+            end
+        end
+        --[[maid.autofarmbox = RunService.Stepped:Connect(function()
+            functions.changeteam('Delivery Driver')
+            functions.getbox()
+            for i,v in next,game.Workspace.DeliverySys.DeliveryPoints:GetChildren() do
+                if v:FindFirstChild('TouchInterest') and v.Locate.Locate.Enabled == true then
+                    tpl = v.CFrame
+                    functions.equipthings("Delivery Box")
+                    root.CFrame = tpl
+                    functions.simulateTouch(v)
+                    functions.unequipthings("Delivery Box")
+                end
+            end
+        end)]]
+    end
+    
+    function functions.autosellicecream(toggle)
+        if not toggle then
+            maid.autosellicecream = nil
+            return
+        end
+
+        maid.autosellicecream = RunService.Stepped:Connect(function()
+            functions.changeteam('Mixue Ice Cream')
+            functions.geticecream()
+            if char:FindFirstChild('Filled Ice Cream Cone') or lp.Backpack:FindFirstChild('Filled Ice Cream Cone') then
+                for i,v in next,game.Workspace:GetChildren() do
+                    if tostring(v):find('Customer') and v.ProximityPrompt.Enabled == true then
+                        fireproximityprompt(v.ProximityPrompt)
+                    end
+                end
+            end
+        end)
+    end
+
+    function functions.autosellcoffee(toggle)
+        if not toggle then
+            maid.autosellcoffee = nil
+            return
+        end
+
+        maid.autosellcoffee = RunService.Stepped:Connect(function()
+            functions.changeteam('Teawen Barista')
+            functions.getcoffee()
+            if char:FindFirstChild('Filled Coffee Cup') or lp.Backpack:FindFirstChild('Filled Coffee Cup') then
+                for i,v in next,game.Workspace:GetChildren() do
+                    if tostring(v):find('Customer') and v.ProximityPrompt.Enabled == true then
+                        fireproximityprompt(v.ProximityPrompt)
+                    end
+                end
+            end
+        end)
+    end
+end
+--//UI部分
+local Window = library:CreateWindow({
+    Name = "Mohun-Ware-"..tostring(moversion)..'-'..gamename,
+    Icon = 0,
+    LoadingTitle = "欢迎使用凌脚本",
+    LoadingSubtitle = "玩的开心",
+    Theme = "Bloom",
+
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+
+    ConfigurationSaving = {
+    Enabled = true,
+    FolderName = nil,
+    FileName = "Mohun-Ware"
+    },
+
+    Discord = {
+    Enabled = true,
+    Invite = "gCcExNxhjQ",
+    RememberJoins = false
+    }
+})
+
+local Tab = Window:CreateTab("杂项", 4483362458)
+local Tab2 = Window:CreateTab('玩家类', 4483362458)
+local Tab3 = Window:CreateTab('环境类', 4483362458)
+local Tab4 = Window:CreateTab('自动刷钱', 4483362458)
+local Tab5 = Window:CreateTab('汽车类', 4483362458)
+
+do
+    Tab:CreateSection("双重防挂机检测已自动开启")
+    Tab:CreateButton({
+        Name = "打开买车菜单",
+        Callback = function()
+            lp.PlayerGui.DEALERSHIP.Enabled = true
+        end,
+    })
+    Tab:CreateButton({
+        Name = "释放监狱玩家",
+        Callback = function()
+            root.CFrame = workspace.JailTerminal.Main.CFrame
+        end,
+    })
+    Tab:CreateToggle({
+        Name = "自动点燃手中烟花",
+        CurrentValue = false,
+        Flag = "fireworkonhand",
+        Callback = function(Value)
+            functions.fireworkonhand(Value)
+        end,
+    })
+    Tab:CreateToggle({
+        Name = "自动点燃游戏所有烟花",
+        CurrentValue = false,
+        Flag = "autofirework",
+        Callback = function(Value)
+            functions.autofirework(Value)
+        end,
+    })
+end
+
+do
+    Tab2:CreateButton({
+        Name = "重生",
+        Callback = function()
+            Utility:getPlayerData().character:BreakJoints()
+            Utility:getPlayerData().humanoid.Health = 0
+        end,
+    })
+    Tab2:CreateToggle({
+        Name = "移速更改",
+        CurrentValue = false,
+        Flag = "speedHack",
+        Callback = function(Value)
+            functions.speedHack(Value)
+        end,
+    })
+    Tab2:CreateSlider({
+        Name = "移速",
+        Range = {16, 200},
+        Increment = 10,
+        Suffix = "移速",
+        CurrentValue = 16,
+        Flag = "speedHackValue",
+        Callback = function(Value)
+        end,
+    })
+    Tab2:CreateToggle({
+        Name = "无限跳跃",
+        CurrentValue = false,
+        Flag = "infiniteJump",
+        Callback = function(Value)
+            functions.infiniteJump(Value)
+        end,
+    })
+    Tab2:CreateSlider({
+        Name = "跳跃高度",
+        Range = {djumpvalue, 200},
+        Increment = 10,
+        Suffix = "高度",
+        CurrentValue = djumpvalue,
+        Flag = "infiniteJumpHeight",
+        Callback = function(Value)
+        end,
+    })
+    Tab2:CreateToggle({
+        Name = "穿墙",
+        CurrentValue = false,
+        Flag = "noclip",
+        Callback = function(Value)
+            functions.noClip(Value)
+        end,
+    })
+end    
+    
+do
+    Tab3:CreateToggle({
+        Name = "没有雾霾",
+        CurrentValue = false,
+        Flag = "noFog",
+        Callback = function(Value)
+            functions.noFog(Value)
+        end,
+    })
+    Tab3:CreateToggle({
+        Name = "没有模糊",
+        CurrentValue = false,
+        Flag = "noBlur",
+        Callback = function(Value)
+            functions.noBlur(Value)
+        end,
+    })
+    Tab3:CreateToggle({
+        Name = "亮度拉高",
+        CurrentValue = false,
+        Flag = "fullBright",
+        Callback = function(Value)
+            functions.fullBright(Value)
+        end,
+    })
+end
+
+do
+    Tab4:CreateToggle({
+        Name = "自动送快递(不会被踢但速度会慢点)",
+        CurrentValue = false,
+        Flag = "autofarmbox",
+        Callback = function(Value)
+            functions.autofarmbox(Value)
+        end,
+    })
+    Tab4:CreateToggle({
+        Name = "自动卖冰淇淋(安全稳定)",
+        CurrentValue = false,
+        Flag = "autosellicecream",
+        Callback = function(Value)
+            functions.autosellicecream(Value)
+        end,
+    })
+    Tab4:CreateToggle({
+        Name = "自动卖茶(安全稳定)",
+        CurrentValue = false,
+        Flag = "autosellcoffee",
+        Callback = function(Value)
+            functions.autosellcoffee(Value)
+        end,
+    })
+end
+
+do
+    Tab5:CreateToggle({
+        Name = "自动按喇叭",
+        CurrentValue = false,
+        Flag = "autohorn",
+        Callback = function(Value)
+            functions.autohorn(Value)
+        end,
+    })
+    Tab5:CreateToggle({
+        Name = "自动打火",
+        CurrentValue = false,
+        Flag = "autostart",
+        Callback = function(Value)
+            if game.Workspace.SpawnedCars:FindFirstChild(lp.Name.."'s Car") then
+                require(game.Workspace.SpawnedCars:FindFirstChild(lp.Name.."'s Car")["A-Chassis Tune"])['AutoStart'] = Value
+            end
+        end,
+    })
+end
