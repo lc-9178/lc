@@ -31,11 +31,10 @@ local Tab = Window:Tab({ Title = "Banana Track" })
 Tab:Select()
 
 local BananaAura = false
-local TrackSpeed = 15
-local ThrowDelay = 1.5
+local ThrowDelay = 0.8
 
 Tab:Toggle({
-    Title = "Banana Track Aura",
+    Title = "Banana Stick Aura",
     Callback = function(state)
         BananaAura = state
         bladeaura = state
@@ -43,21 +42,10 @@ Tab:Toggle({
 })
 
 Tab:Slider({
-    Title = "Speed",
-    Min = 5,
-    Max = 30,
-    Default = 15,
-    Increase = 1,
-    Callback = function(value)
-        TrackSpeed = value
-    end,
-})
-
-Tab:Slider({
     Title = "Throw Delay",
-    Min = 0.5,
-    Max = 3.0,
-    Default = 1.5,
+    Min = 0.3,
+    Max = 2.0,
+    Default = 0.8,
     Increase = 0.1,
     Callback = function(value)
         ThrowDelay = value
@@ -82,51 +70,55 @@ local finditem = function(string)
             return data
         end
     end
-end-- ===== 4. 投掷核心 =====
-local hackthrow = function(plr, itemname, itemguid, velocity, epos)
-    if plr ~= LocalPlayer then return end
+end-- ===== 4. 直接放置香蕉到敌人身体 =====
+local function stickBananaToPlayer(plr)
+    if plr == LocalPlayer then return end
+    if not plr.Character then return end
+    
+    local item = finditem("Banana Peel")
+    if not item then
+        task.spawn(InvokeServer, "attemptPurchase", "Banana Peel")
+        return
+    end
+    
+    -- 装备香蕉
+    FireServer("equip", item.guid)
+    
+    -- 获取敌人身体部位
+    local targetChar = plr.Character
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    local targetHead = targetChar:FindFirstChild("Head")
+    local targetTorso = targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
+    
+    if not targetRoot then return end
+    
+    -- 随机选择粘贴位置：身体中心、头、胸
+    local attachPart = targetRoot
+    if targetHead and math.random(1, 3) == 1 then
+        attachPart = targetHead
+    elseif targetTorso and math.random(1, 2) == 1 then
+        attachPart = targetTorso
+    end
+    
+    -- 直接调用粘性香蕉远程事件，不经过投掷
+    local stickGuid = GUID()
+    
+    -- 构建粘贴参数
+    local hitPart = attachPart
+    local relativeCFrame = hitPart.CFrame:ToObjectSpace(CFrame.new(hitPart.Position))
+    local stickyCFrame = CFrame.new(hitPart.Position)
+    
+    -- 直接粘贴到敌人身体
+    pcall(function()
+        InvokeServer("hitSticky", stickGuid, hitPart, relativeCFrame, stickyCFrame)
+    end)
+    
+    -- 移除香蕉皮物品（使用后消耗）
     task.spawn(function()
-        local throwGuid = GUID()
-        local success, stickyId = InvokeServer("throwSticky", throwGuid, itemname, itemguid, velocity, epos)
-        if not success then return end
-        
-        local dummyPart = Instance.new("Part")
-        dummyPart.Size = Vector3.new(2, 2, 2)
-        dummyPart.Position = epos
-        dummyPart.Anchored = true
-        dummyPart.Transparency = 1
-        dummyPart.CanCollide = true
-        dummyPart.Parent = workspace
-        
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-        rayParams.FilterDescendantsInstances = { plr.Character, workspace.Game.Local, workspace.Game.Drones }
-        
-        local dist = (epos - plr.Character.Head.Position).Magnitude
-        local rayResult = workspace:Raycast(
-            plr.Character.Head.Position,
-            (epos - plr.Character.Head.Position).Unit * (dist + 5),
-            rayParams
-        )
-        
-        if rayResult and rayResult.Instance then
-            local hitPart = rayResult.Instance
-            local relativeHitCFrame = hitPart.CFrame:ToObjectSpace(CFrame.new(rayResult.Position, rayResult.Position + rayResult.Normal))
-            local stickyCFrame = CFrame.new(rayResult.Position)
-            
-            if dummyPart.Parent then dummyPart:Destroy() end
-            
-            getgenv().throwargs = {
-                "hitSticky",
-                stickyId or throwGuid,
-                hitPart,
-                relativeHitCFrame,
-                stickyCFrame,
-            }
-            InvokeServer("hitSticky", stickyId or throwGuid, hitPart, relativeHitCFrame, stickyCFrame)
-        else
-            if dummyPart.Parent then dummyPart:Destroy() end
-        end
+        task.wait(0.1)
+        pcall(function()
+            FireServer("removeItem", item.guid)
+        end)
     end)
 end-- ===== 5. 购买系统 =====
 local function buyBanana()
@@ -135,105 +127,87 @@ local function buyBanana()
     end
 end
 
-local function buyAmmo()
-    if math.random(1, 3) == 1 then
-        task.spawn(InvokeServer, "attemptPurchaseAmmo", "Banana Peel")
-    end
-end-- ===== 6. 追踪光环 =====
-local currentTarget = nil
-local lastThrowTime = 0
+-- 不需要弹药，直接放置-- ===== 6. 攻击多个玩家 - 直接放置香蕉到身体 =====
+local targetList = {}
+local lastStickTimes = {}
 
-local function executebladekill(plr, head)
+local function stickBanana(plr)
     if plr == LocalPlayer then return end
+    if not plr.Character then return end
     
     local item = finditem("Banana Peel")
     if item then
         FireServer("equip", item.guid)
         
         local targetChar = plr.Character
-        if not targetChar then return end
         local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
         if not targetRoot then return end
         
-        local myChar = LocalPlayer.Character
-        if not myChar then return end
-        local rightHand = myChar:FindFirstChild("RightHand")
-        if not rightHand then return end
+        -- 直接粘贴到敌人身体中心
+        local stickGuid = GUID()
+        local hitPart = targetRoot
+        local relativeCFrame = hitPart.CFrame:ToObjectSpace(CFrame.new(hitPart.Position))
+        local stickyCFrame = CFrame.new(hitPart.Position)
         
-        local spos = rightHand.Position
-        local epos = targetRoot.Position
-        local direction = (epos - spos).Unit
-        local distance = (spos - epos).Magnitude
-        local velocity = direction * (distance * TrackSpeed / 5)
+        pcall(function()
+            InvokeServer("hitSticky", stickGuid, hitPart, relativeCFrame, stickyCFrame)
+        end)
         
-        buyAmmo()
-        hackthrow(LocalPlayer, "Banana Peel", item.guid, velocity, epos)
-        
-        if getgenv().throwargs then
-            getgenv().throwargs[3] = head
-            task.spawn(InvokeServer, unpack(getgenv().throwargs))
-        end
+        -- 消耗香蕉皮
+        task.spawn(function()
+            task.wait(0.1)
+            pcall(function()
+                FireServer("removeItem", item.guid)
+            end)
+        end)
     else
         buyBanana()
     end
-end-- ===== 7. 主循环 =====
+end-- ===== 7. 主循环 - 给所有敌人身上贴香蕉 =====
 RunService.Heartbeat:Connect(function()
     if BananaAura and HumanoidRootPart and LocalPlayer.Character then
         
-        if currentTarget then
-            local char = currentTarget.Character
-            if char then
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                local head = char:FindFirstChild("Head")
-                local root = char:FindFirstChild("HumanoidRootPart")
-                
-                if hum and hum.Health > 0 and head and root then
-                    local dist = (HumanoidRootPart.Position - head.Position).Magnitude
-                    if dist < 190 then
-                        if tick() - lastThrowTime >= ThrowDelay then
-                            executebladekill(currentTarget, head)
-                            lastThrowTime = tick()
-                        end
-                        return
-                    end
-                end
-            end
-        end
-        
-        currentTarget = nil
-        local closestDist = 190
-        local closestPlayer = nil
-        
+        -- 更新目标列表
+        targetList = {}
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
                 local head = plr.Character:FindFirstChild("Head")
-                local root = plr.Character:FindFirstChild("HumanoidRootPart")
                 
-                if hum and hum.Health > 0 and head and root then
+                if hum and hum.Health > 0 and head then
                     local dist = (HumanoidRootPart.Position - head.Position).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        closestPlayer = plr
+                    if dist < 190 then
+                        table.insert(targetList, plr)
                     end
                 end
             end
         end
         
-        if closestPlayer then
-            currentTarget = closestPlayer
-            if tick() - lastThrowTime >= ThrowDelay then
-                local head = closestPlayer.Character:FindFirstChild("Head")
-                if head then
-                    executebladekill(closestPlayer, head)
-                    lastThrowTime = tick()
-                end
+        -- 给所有在范围内的敌人身上贴香蕉
+        for _, plr in ipairs(targetList) do
+            if not lastStickTimes[plr] then
+                lastStickTimes[plr] = 0
+            end
+            
+            if tick() - lastStickTimes[plr] >= ThrowDelay then
+                stickBanana(plr)
+                lastStickTimes[plr] = tick()
             end
         end
     end
-end)-- ===== 8. 自动购买 =====
+end)-- ===== 8. 清理死亡玩家 =====
 task.spawn(function()
-    while task.wait(3.0) do
+    while task.wait(1) do
+        for plr, _ in pairs(lastStickTimes) do
+            if not plr or not plr.Character or not plr.Character:FindFirstChildOfClass("Humanoid") or 
+               plr.Character.Humanoid.Health <= 0 then
+                lastStickTimes[plr] = nil
+            end
+        end
+    end
+end)-- ===== 9. 自动购买香蕉皮 =====
+task.spawn(function()
+    while task.wait(2.0) do
         if BananaAura then
             pcall(function()
                 if not finditem("Banana Peel") then
