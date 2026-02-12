@@ -1,11 +1,11 @@
--- ===== 第一部分：初始化 + Ohio专用绕过功能（全自动开启，无UI）=====
-Players = cloneref(game:GetService("Players"))
-RunService = cloneref(game:GetService("RunService"))
-ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
-LocalPlayer = Players.LocalPlayer
-Character = LocalPlayer.Character
-Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+-- ===== 第一部分：初始化 + Ohio专用绕过功能（手机端优化）=====
+local Players = cloneref(game:GetService("Players"))
+local RunService = cloneref(game:GetService("RunService"))
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character
+local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
 
 LocalPlayer.CharacterAdded:Connect(function(char)
     Character = char
@@ -13,9 +13,9 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     Humanoid = char:WaitForChild("Humanoid")
 end)
 
--- ===== 绕过功能（一执行就打开，永远运行）=====
+-- ===== 绕过功能（手机端自动运行）=====
 task.spawn(function()
-    -- 反布娃娃状态（防止僵直）
+    -- 反布娃娃
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
@@ -24,7 +24,7 @@ task.spawn(function()
         end
     end)
     
-    -- 反坐下状态
+    -- 反坐下
     task.spawn(function()
         LocalPlayer.CharacterAdded:Connect(function(char)
             task.wait(0.5)
@@ -36,7 +36,7 @@ task.spawn(function()
         end
     end)
     
-    -- 防shadowban检测（清除封禁数据）
+    -- 防封禁
     task.spawn(function()
         local gc = getgc(true)
         for _, v in ipairs(gc) do
@@ -51,33 +51,36 @@ task.spawn(function()
         end
     end)
     
-    -- 忽略好友检测
+    -- 忽略好友
     task.spawn(function()
         LocalPlayer.IsFriendsWith = function(self, userId) return false end
     end)
-end)-- ===== 第二部分：WindUI界面 + 香蕉皮杀戮光环开关 =====
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
-local Window = WindUI:CreateWindow({
-    Title = "nine team | Ohio",
-    OpenButton = {
-        Title = "nine team",
-        CornerRadius = UDim.new(0, 16),
-        StrokeThickness = 3,
-        Color = ColorSequence.new(Color3.fromHex("7aa2f7"), Color3.fromHex("7aa2f7")),
-        OnlyMobile = false,
-        Enabled = true,
-        Draggable = true,
-        Scale = 0.5,
-    },
+end)-- ===== 第二部分：手机端UI界面（大按钮、易触控）=====
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/2277990530/Ui-/main/Universal%20UI%20Library.lua"))()
+
+local Window = library:CreateWindow({
+    Name = "nine team | Ohio",
+    SubName = "手机专用版",
+    PageTitle = "Ohio",
+    SaveFolder = "NineTeam_Ohio"
 })
 
--- 香蕉皮杀戮光环标签页
-local KillTab = Window:Tab({ Title = "kill aura" })
-KillTab:Select()
-KillTab:Toggle({ Title = "Banana Aura", Callback = function(state) bladeaura = state end })-- ===== 第三部分：透视ESP（Ohio专用血条显示）=====
-local PlayerTab = Window:Tab({ Title = "玩家" })
+-- 主菜单
+local MainPage = Window:CreatePage("杀戮光环", 1)
+local KillSection = MainPage:Section("香蕉皮设置", true)
 
-PlayerTab:Button({ Title = "透视ESP", Callback = function()
+local BananaAura = false
+KillSection:Toggle("香蕉皮光环", false, function(v)
+    BananaAura = v
+    bladeaura = v
+end)
+
+KillSection:Label("自动锁定一个敌人直到倒下")
+KillSection:Label("从右手 → 敌人身体中心")-- ===== 第三部分：透视ESP（手机端优化）=====
+local ESPPage = Window:CreatePage("透视", 2)
+local ESPSection = ESPPage:Section("玩家透视", true)
+
+ESPSection:Button("开启透视ESP", function()
     local Players = game:GetService("Players")
     local RunService = game:GetService("RunService")
     local LocalPlayer = Players.LocalPlayer
@@ -174,7 +177,22 @@ PlayerTab:Button({ Title = "透视ESP", Callback = function()
         LocalCharacter = character
         LocalHead = character:WaitForChild("Head")
     end)
-end})-- ===== 第四部分：加速功能 + 连跳 =====
+end)
+
+ESPSection:Button("关闭透视ESP", function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                local nametag = head:FindFirstChild("PlayerNametag")
+                if nametag then nametag:Destroy() end
+            end
+        end
+    end
+end)-- ===== 第四部分：移动加速 + 连跳（手机端优化）=====
+local MovePage = Window:CreatePage("移动", 3)
+local MoveSection = MovePage:Section("加速设置", true)
+
 local speed = 1
 local tpEnabled = false
 local heartbeatConnection = nil
@@ -217,16 +235,20 @@ LocalPlayer.CharacterAdded:Connect(function(newCharacter)
 end)
 setupCharacter()
 
-PlayerTab:Slider({ Title = "加速设置", Min = 1, Max = 15, Default = 1, Callback = function(value) speed = value end })
-PlayerTab:Toggle({ Title = "速度开关", Callback = function(value)
-    tpEnabled = value
-    if value then startTPWalk() else stopTPWalk() end
-end})
+MoveSection:Slider("加速倍率", 1, 15, 1, function(v)
+    speed = v
+end)
 
--- 连跳
+MoveSection:Toggle("速度开关", false, function(v)
+    tpEnabled = v
+    if v then startTPWalk() else stopTPWalk() end
+end)
+
+local JumpSection = MovePage:Section("跳跃设置", true)
 local jumpConnection
-PlayerTab:Toggle({ Title = "连跳", Callback = function(value)
-    if value then
+
+JumpSection:Toggle("连跳", false, function(v)
+    if v then
         jumpConnection = game:GetService("UserInputService").JumpRequest:Connect(function()
             if humanoid and humanoid.Health > 0 then
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -238,17 +260,17 @@ PlayerTab:Toggle({ Title = "连跳", Callback = function(value)
             jumpConnection = nil
         end
     end
-end})-- ===== 第五部分：加载远程 + 香蕉皮攻击核心逻辑 =====
-load = require(ReplicatedStorage.devv).load
-Signal = load("Signal")
-FireServer = Signal.FireServer
-InvokeServer = Signal.InvokeServer
-GUID = load("GUID")
-v3item = load("v3item")
-Raycast = load("Raycast")
+end)-- ===== 第五部分：加载远程 + 香蕉皮攻击核心 =====
+local load = require(ReplicatedStorage.devv).load
+local Signal = load("Signal")
+local FireServer = Signal.FireServer
+local InvokeServer = Signal.InvokeServer
+local GUID = load("GUID")
+local v3item = load("v3item")
+local Raycast = load("Raycast")
 local inventory = v3item.inventory
 
-hackthrow = function(plr, itemname, itemguid, velocity, epos)
+local hackthrow = function(plr, itemname, itemguid, velocity, epos)
     if plr ~= LocalPlayer then return end
     task.spawn(function()
         local throwGuid = GUID()
@@ -289,18 +311,18 @@ hackthrow = function(plr, itemname, itemguid, velocity, epos)
     end)
 end
 
-getinventory = function() return inventory.items end
+local getinventory = function() return inventory.items end
 
-finditem = function(string)
+local finditem = function(string)
     for guid, data in next, getinventory() do
         if data.name == string or data.type == string or data.subtype == string then
             return data
         end
     end
-end-- ===== 第六部分：香蕉皮杀戮光环（锁定一个目标直到倒下）=====
+end-- ===== 第六部分：香蕉皮杀戮光环（手机端自动锁定）=====
 local currentTarget = nil
 
-executebladekill = function(plr, head)
+local executebladekill = function(plr, head)
     local item = finditem("Banana Peel")
     if item then
         FireServer("equip", item.guid)
@@ -351,3 +373,6 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
+
+-- 手机端提示
+library:Notify("✅ Ohio手机版加载成功 | 绕过已自动开启")
