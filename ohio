@@ -1,5 +1,25 @@
 -- Banana Blaster Script - Part 1/4
--- Services and Initialization
+-- Mobile Fix + Services and Initialization
+
+-- 修复移动端滑块无法拖动的问题
+local old = getrenv().require
+getrenv().require = function(a)
+    if a == "UserInputService" then
+        local uis = old(a)
+        local oldInput = uis.InputBegan
+        uis.InputBegan = function(self, func)
+            -- 强制将触摸事件转换为鼠标事件，让UI库能识别
+            return oldInput(self, function(input, gameProcessed)
+                if input.UserInputType == Enum.UserInputType.Touch then
+                    input.UserInputType = Enum.UserInputType.MouseButton1
+                end
+                return func(input, gameProcessed)
+            end)
+        end
+        return uis
+    end
+    return old(a)
+end
 
 Players = cloneref(game:GetService("Players"))
 RunService = cloneref(game:GetService("RunService"))
@@ -21,7 +41,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     Humanoid = char:WaitForChild("Humanoid")
 end)
 
--- Load WindUI
+-- Load WindUI with mobile fix
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
 local Window = WindUI:CreateWindow({
     Title = "Banana Blaster" .. (isMobile and " 📱" or " 🖥️"),
@@ -48,7 +68,7 @@ local predictMovement = true
 local mobileSensitivity = 1.0
 local mobileAutoAim = true
 -- Banana Blaster Script - Part 2/4
--- UI Elements
+-- UI Elements with Mobile Support
 
 -- Main Controls
 MainTab:Toggle({
@@ -495,6 +515,7 @@ end
 print("🍌 Banana Blaster Script Loaded Successfully!")
 print("📱 Mobile Mode:", isMobile and "ENABLED" or "DISABLED")
 if isMobile then
+    print("✅ Mobile Fix: Sliders should work now")
     print("👆 Mobile Controls: Tap screen to throw")
     print("📏 Swipe Controls: Drag and release to aim")
 else
