@@ -1,4 +1,4 @@
--- ===== 第一部分：初始化 + Ohio专用绕过功能 =====
+-- ===== 1. Init + Ohio Bypass =====
 local Players = cloneref(game:GetService("Players"))
 local RunService = cloneref(game:GetService("RunService"))
 local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
@@ -13,9 +13,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     Humanoid = char:WaitForChild("Humanoid")
 end)
 
--- ===== 绕过功能（自动开启）=====
 task.spawn(function()
-    -- 反布娃娃
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
@@ -24,7 +22,6 @@ task.spawn(function()
         end
     end)
     
-    -- 反坐下
     task.spawn(function()
         LocalPlayer.CharacterAdded:Connect(function(char)
             task.wait(0.5)
@@ -36,7 +33,6 @@ task.spawn(function()
         end
     end)
     
-    -- 防封禁
     task.spawn(function()
         local gc = getgc(true)
         for _, v in ipairs(gc) do
@@ -51,47 +47,60 @@ task.spawn(function()
         end
     end)
     
-    -- 忽略好友
     task.spawn(function()
         LocalPlayer.IsFriendsWith = function(self, userId) return false end
     end)
-end)-- ===== 第二部分：手机端UI界面（只有香蕉皮光环）=====
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/lnwzaaaaxxx/UI-/main/SimpleMobileLibrary.lua"))()
+end)-- ===== 2. WindUI (以前的UI) =====
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
 
--- 创建窗口
-local Window = library:CreateWindow("🍌 香蕉追踪", "Ohio手机版", 1)
+local Window = WindUI:CreateWindow({
+    Title = "Banana Track",
+    OpenButton = {
+        Title = "Banana",
+        CornerRadius = UDim.new(0, 16),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(Color3.fromHex("7aa2f7"), Color3.fromHex("7aa2f7")),
+        OnlyMobile = true,
+        Enabled = true,
+        Draggable = true,
+        Scale = 0.5,
+    },
+})
 
--- 主菜单
-local MainPage = Window:Page("香蕉光环", 1)
-local BananaSection = MainPage:Section("🍌 香蕉皮追踪设置", true)
+local Tab = Window:Tab({ Title = "Banana Aura" })
+Tab:Select()
 
 local BananaAura = false
 local TrackSpeed = 15
 local TrackRange = 190
 
--- 开关
-BananaSection:Toggle("🍌 香蕉追踪光环", false, function(v)
-    BananaAura = v
-    bladeaura = v
-    if v then
-        library:Notification("✅ 香蕉追踪已开启", 1)
-    else
-        library:Notification("❌ 香蕉追踪已关闭", 1)
-    end
-end)
+Tab:Toggle({
+    Title = "Banana Aura",
+    Callback = function(state)
+        BananaAura = state
+        bladeaura = state
+    end,
+})
 
--- 速度滑块
-BananaSection:Slider("🎯 追踪速度", 5, 30, 15, function(v)
-    TrackSpeed = v
-end)
+Tab:Slider({
+    Title = "Speed",
+    Min = 5,
+    Max = 30,
+    Default = 15,
+    Callback = function(value)
+        TrackSpeed = value
+    end,
+})
 
--- 范围滑块
-BananaSection:Slider("📏 追踪范围", 50, 300, 190, function(v)
-    TrackRange = v
-end)
-
-BananaSection:Label("效果：自动追踪敌人")
-BananaSection:Label("走到哪扔到哪")-- ===== 第三部分：加载远程 + 香蕉皮核心 =====
+Tab:Slider({
+    Title = "Range",
+    Min = 50,
+    Max = 300,
+    Default = 190,
+    Callback = function(value)
+        TrackRange = value
+    end,
+})-- ===== 3. Remote Load + Banana Core =====
 local load = require(ReplicatedStorage.devv).load
 local Signal = load("Signal")
 local FireServer = Signal.FireServer
@@ -101,7 +110,6 @@ local v3item = load("v3item")
 local Raycast = load("Raycast")
 local inventory = v3item.inventory
 
--- 追踪扔香蕉
 local hackthrow = function(plr, itemname, itemguid, velocity, epos)
     if plr ~= LocalPlayer then return end
     task.spawn(function()
@@ -164,12 +172,12 @@ local function buyBanana()
         InvokeServer("attemptPurchase", "Banana Peel")
         InvokeServer("attemptPurchaseAmmo", "Banana Peel")
     end)
-end-- ===== 第四部分：香蕉皮追踪光环（只有香蕉皮）=====
+end-- ===== 4. Banana Track Aura =====
 local currentTarget = nil
 local lastThrowTime = 0
 local throwCooldown = 0.3
 
-local executebladekill = function(plr, head)
+local function executeBanana(plr, head)
     local success, item = pcall(finditem, "Banana Peel")
     if success and item then
         pcall(FireServer, "equip", item.guid)
@@ -198,7 +206,6 @@ local executebladekill = function(plr, head)
     end
 end
 
--- 主循环
 task.spawn(function()
     while task.wait(0.1) do
         pcall(function()
@@ -209,7 +216,6 @@ task.spawn(function()
                     return
                 end
                 
-                -- 追踪当前目标
                 if currentTarget then
                     local char = currentTarget.Character
                     if char then
@@ -220,7 +226,7 @@ task.spawn(function()
                         if hum and hum.Health > 0 and head and root then
                             local dist = (HumanoidRootPart.Position - head.Position).Magnitude
                             if dist < TrackRange then
-                                executebladekill(currentTarget, head)
+                                executeBanana(currentTarget, head)
                                 lastThrowTime = currentTime
                                 return
                             end
@@ -228,7 +234,6 @@ task.spawn(function()
                     end
                 end
                 
-                -- 找新目标
                 currentTarget = nil
                 local closestDist = TrackRange
                 local closestPlayer = nil
@@ -256,7 +261,7 @@ task.spawn(function()
                     currentTarget = closestPlayer
                     local head = closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head")
                     if head then
-                        executebladekill(closestPlayer, head)
+                        executeBanana(closestPlayer, head)
                         lastThrowTime = currentTime
                     end
                 end
@@ -265,7 +270,6 @@ task.spawn(function()
     end
 end)
 
--- 自动购买香蕉皮
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -276,11 +280,3 @@ task.spawn(function()
         end)
     end
 end)
-
--- 初始化完成提示
-task.wait(1)
-library:Notification("🍌 香蕉追踪光环已加载", 2)
-library:Notification("✅ 绕过已开启", 2)
-
--- 显示窗口
-Window:Show()
