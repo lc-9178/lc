@@ -1,4 +1,4 @@
--- ===== 第一部分：初始化 + Ohio专用绕过功能（手机端优化）=====
+-- ===== 第一部分：初始化 + Ohio专用绕过功能 =====
 local Players = cloneref(game:GetService("Players"))
 local RunService = cloneref(game:GetService("RunService"))
 local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
@@ -13,7 +13,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     Humanoid = char:WaitForChild("Humanoid")
 end)
 
--- ===== 绕过功能（手机端自动运行）=====
+-- ===== 绕过功能（自动开启）=====
 task.spawn(function()
     -- 反布娃娃
     task.spawn(function()
@@ -55,239 +55,43 @@ task.spawn(function()
     task.spawn(function()
         LocalPlayer.IsFriendsWith = function(self, userId) return false end
     end)
-end)-- ===== 第二部分：手机端UI界面（香蕉皮追踪光环）=====
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/2277990530/Ui-/main/Universal%20UI%20Library.lua"))()
+end)-- ===== 第二部分：手机端UI界面（只有香蕉皮光环）=====
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/lnwzaaaaxxx/UI-/main/SimpleMobileLibrary.lua"))()
 
-local Window = library:CreateWindow({
-    Name = "🍌 香蕉追踪 | Ohio",
-    SubName = "手机追踪版",
-    PageTitle = "自动跟随扔香蕉",
-    SaveFolder = "Banana_Track_Ohio"
-})
+-- 创建窗口
+local Window = library:CreateWindow("🍌 香蕉追踪", "Ohio手机版", 1)
 
 -- 主菜单
-local MainPage = Window:CreatePage("🍌 香蕉光环", 1)
-local KillSection = MainPage:Section("香蕉皮追踪设置", true)
+local MainPage = Window:Page("香蕉光环", 1)
+local BananaSection = MainPage:Section("🍌 香蕉皮追踪设置", true)
 
 local BananaAura = false
-local TrackSpeed = 15  -- 扔香蕉速度
-local TrackRange = 190 -- 追踪范围
+local TrackSpeed = 15
+local TrackRange = 190
 
-KillSection:Toggle("🍌 香蕉追踪光环", false, function(v)
+-- 开关
+BananaSection:Toggle("🍌 香蕉追踪光环", false, function(v)
     BananaAura = v
     bladeaura = v
     if v then
-        library:Notify("✅ 香蕉追踪已开启 | 走到哪扔到哪")
+        library:Notification("✅ 香蕉追踪已开启", 1)
     else
-        library:Notify("❌ 香蕉追踪已关闭")
+        library:Notification("❌ 香蕉追踪已关闭", 1)
     end
 end)
 
-KillSection:Slider("🎯 追踪速度", 5, 30, 15, function(v)
+-- 速度滑块
+BananaSection:Slider("🎯 追踪速度", 5, 30, 15, function(v)
     TrackSpeed = v
 end)
 
-KillSection:Slider("📏 追踪范围", 50, 300, 190, function(v)
+-- 范围滑块
+BananaSection:Slider("📏 追踪范围", 50, 300, 190, function(v)
     TrackRange = v
 end)
 
-KillSection:Label("🍌 效果：玩家走到哪")
-KillSection:Label("   香蕉皮就扔到哪")
-KillSection:Label("   自动锁定当前目标")-- ===== 第三部分：透视ESP（手机端优化）=====
-local ESPPage = Window:CreatePage("👁️ 透视", 2)
-local ESPSection = ESPPage:Section("玩家透视", true)
-
-ESPSection:Button("👁️ 开启透视ESP", function()
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local LocalPlayer = Players.LocalPlayer
-    local LocalCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local LocalHead = LocalCharacter:WaitForChild("Head")
-    local playerConnections = {}
-
-    local function updateNametag(player, textLabel, head)
-        local character = player.Character
-        if not character then return end
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local targetHead = character:FindFirstChild("Head")
-        if humanoid and targetHead and humanoid.Health > 0 then
-            local distance = (LocalHead.Position - targetHead.Position).Magnitude
-            textLabel.Text = string.format("%s\n❤️ %d/%d\n📏 %.1fm", player.Name, math.floor(humanoid.Health), math.floor(humanoid.MaxHealth), distance)
-            textLabel.Visible = true
-        else
-            textLabel.Visible = false
-        end
-    end
-
-    local function createNametag(player)
-        if player == LocalPlayer then return end
-        playerConnections[player] = {}
-        local function setupCharacter(character)
-            local head = character:WaitForChild("Head")
-            local billboard = Instance.new("BillboardGui")
-            billboard.Name = "PlayerNametag"
-            billboard.Adornee = head
-            billboard.Size = UDim2.new(0, 200, 0, 80)
-            billboard.StudsOffset = Vector3.new(0, 3, 0)
-            billboard.AlwaysOnTop = true
-            billboard.Parent = head
-            local textLabel = Instance.new("TextLabel")
-            textLabel.Size = UDim2.new(1, 0, 1, 0)
-            textLabel.Font = Enum.Font.GothamBold
-            textLabel.TextSize = 9
-            textLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
-            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-            textLabel.TextStrokeTransparency = 0.3
-            textLabel.BackgroundTransparency = 1
-            textLabel.TextYAlignment = Enum.TextYAlignment.Top
-            textLabel.Parent = billboard
-            local heartbeatConn = RunService.Heartbeat:Connect(function()
-                if not character or not character.Parent then heartbeatConn:Disconnect() return end
-                updateNametag(player, textLabel, head)
-            end)
-            table.insert(playerConnections[player], heartbeatConn)
-            local characterRemovedConn = character.AncestryChanged:Connect(function(_, parent)
-                if parent == nil then
-                    billboard:Destroy()
-                    heartbeatConn:Disconnect()
-                    characterRemovedConn:Disconnect()
-                end
-            end)
-            table.insert(playerConnections[player], characterRemovedConn)
-        end
-        if player.Character then setupCharacter(player.Character) end
-        local charAddedConn = player.CharacterAdded:Connect(setupCharacter)
-        table.insert(playerConnections[player], charAddedConn)
-    end
-
-    local function removeNametag(player)
-        if playerConnections[player] then
-            for _, conn in ipairs(playerConnections[player]) do conn:Disconnect() end
-            playerConnections[player] = nil
-        end
-        if player.Character then
-            local head = player.Character:FindFirstChild("Head")
-            if head then
-                local nametag = head:FindFirstChild("PlayerNametag")
-                if nametag then nametag:Destroy() end
-            end
-        end
-    end
-
-    Players.PlayerAdded:Connect(function(player)
-        createNametag(player)
-        local leavingConn = player.AncestryChanged:Connect(function(_, parent)
-            if parent == nil then removeNametag(player) leavingConn:Disconnect() end
-        end)
-    end)
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            createNametag(player)
-            local leavingConn = player.AncestryChanged:Connect(function(_, parent)
-                if parent == nil then removeNametag(player) leavingConn:Disconnect() end
-            end)
-        end
-    end
-
-    LocalPlayer.CharacterAdded:Connect(function(character)
-        LocalCharacter = character
-        LocalHead = character:WaitForChild("Head")
-    end)
-    library:Notify("👁️ 透视ESP已开启")
-end)
-
-ESPSection:Button("❌ 关闭透视ESP", function()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character then
-            local head = player.Character:FindFirstChild("Head")
-            if head then
-                local nametag = head:FindFirstChild("PlayerNametag")
-                if nametag then nametag:Destroy() end
-            end
-        end
-    end
-    library:Notify("👁️ 透视ESP已关闭")
-end)-- ===== 第四部分：移动加速 + 连跳（手机端优化）=====
-local MovePage = Window:CreatePage("⚡ 移动", 3)
-local MoveSection = MovePage:Section("加速设置", true)
-
-local speed = 1
-local tpEnabled = false
-local heartbeatConnection = nil
-local character, humanoid
-
-local function setupCharacter()
-    character = LocalPlayer.Character
-    if character then
-        humanoid = character:WaitForChild("Humanoid")
-        humanoid.Died:Connect(function()
-            repeat task.wait() until LocalPlayer.Character ~= nil
-            setupCharacter()
-            if tpEnabled then startTPWalk() end
-        end)
-    end
-end
-
-local function startTPWalk()
-    if heartbeatConnection then heartbeatConnection:Disconnect() end
-    heartbeatConnection = RunService.Heartbeat:Connect(function()
-        if not tpEnabled or not character or not humanoid or humanoid.Health <= 0 then return end
-        if humanoid.MoveDirection.Magnitude > 0 then
-            local currentCFrame = character.PrimaryPart.CFrame
-            local newPosition = currentCFrame.Position + (humanoid.MoveDirection * speed)
-            character:SetPrimaryPartCFrame(CFrame.new(newPosition) * currentCFrame.Rotation)
-        end
-    end)
-end
-
-local function stopTPWalk()
-    if heartbeatConnection then
-        heartbeatConnection:Disconnect()
-        heartbeatConnection = nil
-    end
-end
-
-LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-    character = newCharacter
-    setupCharacter()
-end)
-setupCharacter()
-
-MoveSection:Slider("⚡ 加速倍率", 1, 15, 1, function(v)
-    speed = v
-end)
-
-MoveSection:Toggle("⚡ 速度开关", false, function(v)
-    tpEnabled = v
-    if v then 
-        startTPWalk()
-        library:Notify("⚡ 加速已开启")
-    else 
-        stopTPWalk()
-        library:Notify("⚡ 加速已关闭")
-    end
-end)
-
-local JumpSection = MovePage:Section("🦘 跳跃设置", true)
-local jumpConnection
-
-JumpSection:Toggle("🦘 连跳", false, function(v)
-    if v then
-        jumpConnection = game:GetService("UserInputService").JumpRequest:Connect(function()
-            if humanoid and humanoid.Health > 0 then
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end)
-        library:Notify("🦘 连跳已开启")
-    else
-        if jumpConnection then
-            jumpConnection:Disconnect()
-            jumpConnection = nil
-        end
-        library:Notify("🦘 连跳已关闭")
-    end
-end)-- ===== 第五部分：加载远程 + 香蕉皮追踪核心 =====
+BananaSection:Label("效果：自动追踪敌人")
+BananaSection:Label("走到哪扔到哪")-- ===== 第三部分：加载远程 + 香蕉皮核心 =====
 local load = require(ReplicatedStorage.devv).load
 local Signal = load("Signal")
 local FireServer = Signal.FireServer
@@ -297,7 +101,7 @@ local v3item = load("v3item")
 local Raycast = load("Raycast")
 local inventory = v3item.inventory
 
--- 追踪扔香蕉（玩家走到哪就扔到哪）
+-- 追踪扔香蕉
 local hackthrow = function(plr, itemname, itemguid, velocity, epos)
     if plr ~= LocalPlayer then return end
     task.spawn(function()
@@ -305,7 +109,6 @@ local hackthrow = function(plr, itemname, itemguid, velocity, epos)
         local success, stickyId = InvokeServer("throwSticky", throwGuid, itemname, itemguid, velocity, epos)
         if not success then return end
         
-        -- 实时追踪玩家位置，走到哪扔到哪
         local dummyPart = Instance.new("Part")
         dummyPart.Size = Vector3.new(2, 2, 2)
         dummyPart.Position = epos
@@ -318,7 +121,6 @@ local hackthrow = function(plr, itemname, itemguid, velocity, epos)
         rayParams.FilterType = Enum.RaycastFilterType.Blacklist
         rayParams.FilterDescendantsInstances = { plr.Character, workspace.Game.Local, workspace.Game.Drones }
         
-        -- 动态计算距离，实时追踪
         local dist = (epos - plr.Character.Head.Position).Magnitude
         local rayResult = workspace:Raycast(
             plr.Character.Head.Position,
@@ -357,121 +159,128 @@ local finditem = function(string)
     end
 end
 
--- 自动购买香蕉皮
 local function buyBanana()
-    task.spawn(InvokeServer, "attemptPurchase", "Banana Peel")
-    task.spawn(InvokeServer, "attemptPurchaseAmmo", "Banana Peel")
-end-- ===== 第六部分：香蕉皮追踪光环（实时跟随）=====
+    pcall(function()
+        InvokeServer("attemptPurchase", "Banana Peel")
+        InvokeServer("attemptPurchaseAmmo", "Banana Peel")
+    end)
+end-- ===== 第四部分：香蕉皮追踪光环（只有香蕉皮）=====
 local currentTarget = nil
 local lastThrowTime = 0
-local throwCooldown = 0.3  -- 扔香蕉冷却时间（秒）
+local throwCooldown = 0.3
 
 local executebladekill = function(plr, head)
-    local item = finditem("Banana Peel")
-    if item then
-        FireServer("equip", item.guid)
+    local success, item = pcall(finditem, "Banana Peel")
+    if success and item then
+        pcall(FireServer, "equip", item.guid)
         
-        -- 实时追踪敌人位置：玩家走到哪，香蕉皮就扔到哪
-        local spos = LocalPlayer.Character.RightHand.Position  -- 从右手飞出
-        local epos = plr.Character.HumanoidRootPart.Position    -- 实时获取敌人当前位置
+        local targetChar = plr.Character
+        if not targetChar then return end
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if not targetRoot then return end
         
-        -- 计算扔香蕉的方向和速度
+        local myChar = LocalPlayer.Character
+        if not myChar then return end
+        local rightHand = myChar:FindFirstChild("RightHand")
+        if not rightHand then return end
+        
+        local spos = rightHand.Position
+        local epos = targetRoot.Position
+        
         local direction = (epos - spos).Unit
         local distance = (spos - epos).Magnitude
         local velocity = direction * (distance * TrackSpeed / 5)
         
-        -- 每次扔都购买弹药
-        task.spawn(InvokeServer, "attemptPurchaseAmmo", "Banana Peel")
-        
-        -- 扔香蕉皮到敌人当前位置
-        hackthrow(LocalPlayer, "Banana Peel", item.guid, velocity, epos)
-        
-        -- 如果之前有保存的throwargs，也发射
-        if getgenv().throwargs then
-            getgenv().throwargs[3] = head
-            task.spawn(InvokeServer, unpack(getgenv().throwargs))
-        end
+        pcall(InvokeServer, "attemptPurchaseAmmo", "Banana Peel")
+        pcall(hackthrow, LocalPlayer, "Banana Peel", item.guid, velocity, epos)
     else
-        -- 没有香蕉皮就购买
         buyBanana()
     end
 end
 
--- 主循环：实时追踪，走到哪扔到哪
-RunService.Heartbeat:Connect(function()
-    if bladeaura and HumanoidRootPart then
-        local currentTime = tick()
-        
-        -- 冷却控制，防止扔太快
-        if currentTime - lastThrowTime < throwCooldown then
-            return
-        end
-        
-        -- 如果有当前目标
-        if currentTarget then
-            local char = currentTarget.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local head = char and char:FindFirstChild("Head")
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            
-            -- 检查目标是否有效
-            if hum and hum.Health > 0 and head and root then
-                local dist = (HumanoidRootPart.Position - head.Position).Magnitude
-                if dist < TrackRange then
-                    -- 🎯 实时追踪：每次循环都扔到敌人当前位置
-                    executebladekill(currentTarget, head)
-                    lastThrowTime = currentTime
+-- 主循环
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            if bladeaura and HumanoidRootPart then
+                local currentTime = tick()
+                
+                if currentTime - lastThrowTime < throwCooldown then
                     return
                 end
-            end
-        end
-        
-        -- 没有目标或目标已死亡，寻找新目标
-        currentTarget = nil
-        
-        -- 找最近敌人作为新目标
-        local closestDist = TrackRange
-        local closestPlayer = nil
-        
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr == LocalPlayer then continue end
-            local char = plr.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local head = char and char:FindFirstChild("Head")
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            
-            if hum and hum.Health > 0 and head and root then
-                local dist = (HumanoidRootPart.Position - head.Position).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closestPlayer = plr
+                
+                -- 追踪当前目标
+                if currentTarget then
+                    local char = currentTarget.Character
+                    if char then
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        local head = char:FindFirstChild("Head")
+                        local root = char:FindFirstChild("HumanoidRootPart")
+                        
+                        if hum and hum.Health > 0 and head and root then
+                            local dist = (HumanoidRootPart.Position - head.Position).Magnitude
+                            if dist < TrackRange then
+                                executebladekill(currentTarget, head)
+                                lastThrowTime = currentTime
+                                return
+                            end
+                        end
+                    end
+                end
+                
+                -- 找新目标
+                currentTarget = nil
+                local closestDist = TrackRange
+                local closestPlayer = nil
+                
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer then
+                        local char = plr.Character
+                        if char then
+                            local hum = char:FindFirstChildOfClass("Humanoid")
+                            local head = char:FindFirstChild("Head")
+                            local root = char:FindFirstChild("HumanoidRootPart")
+                            
+                            if hum and hum.Health > 0 and head and root then
+                                local dist = (HumanoidRootPart.Position - head.Position).Magnitude
+                                if dist < closestDist then
+                                    closestDist = dist
+                                    closestPlayer = plr
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if closestPlayer then
+                    currentTarget = closestPlayer
+                    local head = closestPlayer.Character and closestPlayer.Character:FindFirstChild("Head")
+                    if head then
+                        executebladekill(closestPlayer, head)
+                        lastThrowTime = currentTime
+                    end
                 end
             end
-        end
-        
-        if closestPlayer then
-            currentTarget = closestPlayer
-            -- 选中新目标立即扔香蕉
-            executebladekill(closestPlayer, closestPlayer.Character.Head)
-            lastThrowTime = currentTime
-            library:Notify("🎯 新目标: " .. closestPlayer.Name)
-        end
+        end)
     end
 end)
 
--- 每0.5秒自动购买香蕉皮，保证弹药充足
+-- 自动购买香蕉皮
 task.spawn(function()
     while task.wait(0.5) do
-        if bladeaura then
-            pcall(function()
+        pcall(function()
+            if bladeaura then
                 InvokeServer("attemptPurchase", "Banana Peel")
                 InvokeServer("attemptPurchaseAmmo", "Banana Peel")
-            end)
-        end
+            end
+        end)
     end
 end)
 
--- 手机端提示
-library:Notify("🍌 香蕉追踪光环已加载")
-library:Notify("🎯 玩家走到哪，香蕉扔到哪")
-library:Notify("✅ 绕过功能自动开启")
+-- 初始化完成提示
+task.wait(1)
+library:Notification("🍌 香蕉追踪光环已加载", 2)
+library:Notification("✅ 绕过已开启", 2)
+
+-- 显示窗口
+Window:Show()
