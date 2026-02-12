@@ -1,347 +1,128 @@
--- Banana Blaster Script - Part 1/4
--- Mobile Fix + Services and Initialization
-
--- 修复移动端滑块无法拖动的问题
-local old = getrenv().require
-getrenv().require = function(a)
-    if a == "UserInputService" then
-        local uis = old(a)
-        local oldInput = uis.InputBegan
-        uis.InputBegan = function(self, func)
-            -- 强制将触摸事件转换为鼠标事件，让UI库能识别
-            return oldInput(self, function(input, gameProcessed)
-                if input.UserInputType == Enum.UserInputType.Touch then
-                    input.UserInputType = Enum.UserInputType.MouseButton1
-                end
-                return func(input, gameProcessed)
-            end)
-        end
-        return uis
-    end
-    return old(a)
-end
+-- Banana Blaster Script - Part 1/6
+-- Base Setup and UI Library
 
 Players = cloneref(game:GetService("Players"))
 RunService = cloneref(game:GetService("RunService"))
 ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
 UserInputService = cloneref(game:GetService("UserInputService"))
-LocalPlayer = Players.LocalPlayer
 
--- Check if mobile
-local isMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Character Setup
-local Character = LocalPlayer.Character
-local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+local isMobile = UserInputService.TouchEnabled
 
-LocalPlayer.CharacterAdded:Connect(function(char)
-    Character = char
-    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
-    Humanoid = char:WaitForChild("Humanoid")
-end)
-
--- Load WindUI with mobile fix
+-- Load WindUI Library
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
+
 local Window = WindUI:CreateWindow({
-    Title = "Banana Blaster" .. (isMobile and " 📱" or " 🖥️"),
+    Title = "Banana Blaster" .. (isMobile and " 📱" or ""),
     OpenButton = {
         Title = "Open Menu",
-        CornerRadius = UDim.new(0, 16),
+        CornerRadius = UDim.new(0, 12),
         StrokeThickness = 3,
         Color = ColorSequence.new(Color3.fromHex("f9a8d4")),
         OnlyMobile = false,
         Enabled = true,
         Draggable = true,
-        Scale = isMobile and 0.8 or 0.5,
+        Scale = isMobile and 0.7 or 0.5,
     },
 })
 
 local MainTab = Window:Tab({Title = "Main"})
 MainTab:Select()
 
--- Configuration
-local bladeaura = false
-local throwDistance = 190
-local throwPower = 15
-local predictMovement = true
-local mobileSensitivity = 1.0
-local mobileAutoAim = true
--- Banana Blaster Script - Part 2/4
--- UI Elements with Mobile Support
+local Config = {
+    Enabled = false,
+    ThrowDistance = 150,
+    ThrowPower = 20,
+    PredictMovement = true,
+    Cooldown = 0.8
+}
+-- Banana Blaster Script - Part 2/6
+-- Main Tab UI
 
--- Main Controls
 MainTab:Toggle({
     Title = "Blade Aura",
     Callback = function(state)
-        bladeaura = state
+        Config.Enabled = state
         print("Blade Aura:", state and "ON" or "OFF")
-    end,
+    end
 })
 
 MainTab:Slider({
     Title = "Throw Distance",
     Min = 50,
     Max = 250,
-    Default = 190,
+    Default = 150,
     Callback = function(value)
-        throwDistance = value
-        print("Throw Distance:", value)
-    end,
+        Config.ThrowDistance = value
+        print("Distance:", value)
+    end
 })
 
 MainTab:Slider({
     Title = "Throw Power",
     Min = 10,
-    Max = 25,
-    Default = 15,
+    Max = 30,
+    Default = 20,
     Callback = function(value)
-        throwPower = value
-        print("Throw Power:", value)
-    end,
+        Config.ThrowPower = value
+        print("Power:", value)
+    end
 })
 
 MainTab:Toggle({
     Title = "Predict Movement",
     Default = true,
     Callback = function(state)
-        predictMovement = state
-        print("Movement Prediction:", state and "ON" or "OFF")
-    end,
+        Config.PredictMovement = state
+        print("Prediction:", state and "ON" or "OFF")
+    end
 })
 
--- Mobile-specific controls
-if isMobile then
-    MainTab:Label({Title = "📱 Mobile Settings", Color = Color3.fromRGB(100, 200, 255)})
-    
-    MainTab:Slider({
-        Title = "Touch Sensitivity",
-        Min = 0.1,
-        Max = 2.0,
-        Default = 1.0,
-        Callback = function(value)
-            mobileSensitivity = value
-            print("Touch Sensitivity:", value)
-        end,
-    })
-    
-    MainTab:Toggle({
-        Title = "Auto Aim Assist",
-        Default = true,
-        Callback = function(state)
-            mobileAutoAim = state
-            print("Auto Aim Assist:", state and "ON" or "OFF")
-        end,
-    })
-    
-    MainTab:Button({
-        Title = "Quick Throw (Tap Screen)",
-        Callback = function()
-            print("Tap anywhere on screen to throw banana")
-        end,
-    })
-end
-
--- Mobile Tab
-local MobileTab = Window:Tab({Title = "Mobile 📱"})
-
-if isMobile then
-    MobileTab:Label({Title = "Mobile Controls", Color = Color3.fromRGB(255, 200, 100)})
-    
-    MobileTab:Toggle({
-        Title = "Enable Touch Controls",
-        Default = true,
-        Callback = function(state)
-            print("Touch Controls:", state and "ENABLED" or "DISABLED")
-        end,
-    })
-    
-    MobileTab:Slider({
-        Title = "Aim Assist Strength",
-        Min = 0,
-        Max = 100,
-        Default = 75,
-        Callback = function(value)
-            print("Aim Assist Strength:", value .. "%")
-        end,
-    })
-    
-    MobileTab:Dropdown({
-        Title = "Throw Mode",
-        Items = {"Auto Target", "Manual Aim", "Smart Hybrid"},
-        Callback = function(selected)
-            print("Throw Mode:", selected)
-        end,
-    })
-    
-    MobileTab:Keybind({
-        Title = "Quick Throw Key",
-        Default = Enum.KeyCode.T,
-        Callback = function()
-            executeManualThrow()
-        end,
-    })
-else
-    MobileTab:Label({Title = "Mobile features not available", Color = Color3.fromRGB(255, 100, 100)})
-    MobileTab:Label({Title = "Play on mobile device to access these settings"})
-end
--- Banana Blaster Script - Part 3/4
--- Mobile Functions
-
--- Mobile touch controls
-local touchStartTime = 0
-local touchStartPosition = Vector2.new(0, 0)
-local isTouching = false
-
--- Enhanced mobile aim function
-function calculateMobileAim(targetPosition, startPosition)
-    if not mobileAutoAim then
-        return targetPosition
+MainTab:Button({
+    Title = "Test Throw",
+    Callback = function()
+        executeTestThrow()
     end
-    
-    local direction = (targetPosition - startPosition).Unit
-    local distance = (targetPosition - startPosition).Magnitude
-    
-    -- Apply aim assist
-    if mobileAutoAim then
-        local assistStrength = mobileSensitivity * 0.3
-        local closestTarget = findClosestTarget(startPosition, distance * 1.5)
-        
-        if closestTarget then
-            local targetDir = (closestTarget - startPosition).Unit
-            direction = (direction + targetDir * assistStrength).Unit
-        end
-    end
-    
-    return startPosition + direction * distance
+})
+-- Banana Blaster Script - Part 3/6
+-- Game Modules
+
+local success, devv = pcall(function()
+    return require(ReplicatedStorage.devv)
+end)
+
+if not success then
+    warn("Failed to load game modules")
+    return
 end
 
-function findClosestTarget(fromPosition, maxDistance)
-    local closestTarget = nil
-    local closestDistance = math.huge
-    
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then continue end
-        
-        local char = plr.Character
-        if not char then continue end
-        
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
-        
-        if hum and hum.Health > 0 and humanoidRootPart then
-            local dist = (fromPosition - humanoidRootPart.Position).Magnitude
-            if dist < maxDistance and dist < closestDistance then
-                closestDistance = dist
-                closestTarget = humanoidRootPart.Position
-            end
-        end
-    end
-    
-    return closestTarget
+local Signal = devv.load("Signal")
+local GUID = devv.load("GUID")
+local v3item = devv.load("v3item")
+
+local FireServer = Signal.FireServer
+local InvokeServer = Signal.InvokeServer
+local inventory = v3item.inventory
+
+-- Inventory functions
+getinventory = function()
+    return inventory and inventory.items or {}
 end
 
--- Mobile touch input handling
-if isMobile then
-    UserInputService.TouchStarted:Connect(function(touch, gameProcessed)
-        if gameProcessed then return end
-        
-        isTouching = true
-        touchStartTime = tick()
-        touchStartPosition = touch.Position
-        
-        -- Quick throw on tap
-        task.spawn(function()
-            wait(0.1) -- Wait to see if it's a tap or drag
-            if isTouching then
-                local currentTime = tick()
-                if currentTime - touchStartTime < 0.3 then -- It's a tap
-                    executeManualThrow()
-                end
-            end
-        end)
-    end)
-    
-    UserInputService.TouchEnded:Connect(function(touch, gameProcessed)
-        if gameProcessed then return end
-        
-        isTouching = false
-        local touchEndTime = tick()
-        local touchDuration = touchEndTime - touchStartTime
-        
-        -- Swipe throw (drag and release)
-        if touchDuration > 0.3 then
-            local endPosition = touch.Position
-            local swipeVector = endPosition - touchStartPosition
-            local swipeMagnitude = swipeVector.Magnitude
-            
-            if swipeMagnitude > 50 then -- Minimum swipe distance
-                executeSwipeThrow(swipeVector, swipeMagnitude)
-            end
-        end
-    end)
-end
-
-function executeManualThrow()
-    local closestTarget = findClosestTarget(HumanoidRootPart.Position, throwDistance)
-    if closestTarget then
-        local targetChar = getCharacterFromPosition(closestTarget)
-        if targetChar then
-            executebladekill(nil, targetChar)
-        end
-    else
-        print("No target found in range")
-    end
-end
-
-function executeSwipeThrow(swipeVector, swipeMagnitude)
-    if not HumanoidRootPart then return end
-    
-    local powerMultiplier = math.min(swipeMagnitude / 200, 2.0) * mobileSensitivity
-    local direction = Vector3.new(swipeVector.X, 50, swipeVector.Y).Unit
-    
-    local startPos = HumanoidRootPart.Position + Vector3.new(0, 2, 0)
-    local targetPos = startPos + direction * throwDistance * powerMultiplier
-    
-    -- Apply mobile aim assist
-    targetPos = calculateMobileAim(targetPos, startPos)
-    
-    local item = finditem("Banana Peel")
-    if item then
-        FireServer("equip", item.guid)
-        local velocity = (targetPos - startPos).Unit * throwPower * powerMultiplier
-        hackthrow(LocalPlayer, "Banana Peel", item.guid, velocity, targetPos)
-    end
-end
-
-function getCharacterFromPosition(position)
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then continue end
-        
-        local char = plr.Character
-        if char then
-            local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
-            if humanoidRootPart and (humanoidRootPart.Position - position).Magnitude < 10 then
-                return char
-            end
+finditem = function(string)
+    for guid, data in next, getinventory() do
+        if data.name == string then
+            return data
         end
     end
     return nil
 end
--- Banana Blaster Script - Part 4/4
--- Core Functions
+-- Banana Blaster Script - Part 4/6
+-- Throw Functions
 
--- Game Modules
-load = require(ReplicatedStorage.devv).load
-Signal = load("Signal")
-FireServer = Signal.FireServer
-InvokeServer = Signal.InvokeServer
-GUID = load("GUID")
-v3item = load("v3item")
-Raycast = load("Raycast")
-local inventory = v3item.inventory
-
--- Throw Function
 hackthrow = function(plr, itemname, itemguid, velocity, epos)
     if plr ~= LocalPlayer then return end
     
@@ -396,129 +177,144 @@ hackthrow = function(plr, itemname, itemguid, velocity, epos)
     end)
 end
 
--- Inventory Functions
-getinventory = function()
-    return inventory and inventory.items or {}
+function GetTargetPosition(targetChar)
+    local rootPart = targetChar:FindFirstChild("HumanoidRootPart")
+    local torso = targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
+    
+    if rootPart then
+        return rootPart.Position
+    elseif torso then
+        return torso.Position
+    else
+        local head = targetChar:FindFirstChild("Head")
+        return head and head.Position or targetChar:GetPivot().Position
+    end
 end
 
-finditem = function(string)
-    for guid, data in next, getinventory() do
-        if data.name == string or data.type == string or data.subtype == string then
-            return data
+function PredictPosition(targetChar, travelTime)
+    local rootPart = targetChar:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return GetTargetPosition(targetChar) end
+    
+    return rootPart.Position + (rootPart.Velocity * travelTime)
+end
+-- Banana Blaster Script - Part 5/6
+-- Target Finding and Throw Logic
+
+function FindBestTarget()
+    local bestTarget = nil
+    local bestDistance = math.huge
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        
+        local char = player.Character
+        if not char then continue end
+        
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
+        
+        local targetPos = GetTargetPosition(char)
+        local distance = (HumanoidRootPart.Position - targetPos).Magnitude
+        
+        if distance <= Config.ThrowDistance and distance < bestDistance then
+            bestTarget = char
+            bestDistance = distance
         end
     end
-    return nil
+    
+    return bestTarget
 end
 
--- Main Throw Logic
-executebladekill = function(plr, targetChar)
-    local item = finditem("Banana Peel")
-    if not item then
+local LastThrowTime = 0
+
+function ThrowBananaAtTarget(targetChar)
+    if tick() - LastThrowTime < Config.Cooldown then return false end
+    
+    local banana = finditem("Banana Peel")
+    if not banana then
         pcall(function()
             InvokeServer("attemptPurchase", "Banana Peel")
         end)
-        return
+        return false
     end
-
-    pcall(function()
-        FireServer("equip", item.guid)
-    end)
-
-    local head = targetChar:FindFirstChild("Head")
-    local humanoidRootPart = targetChar:FindFirstChild("HumanoidRootPart")
-    
-    if not head and not humanoidRootPart then return end
-
-    local targetPart = humanoidRootPart or head
-    local spos = LocalPlayer.Character.RightHand.Position
-    local epos = targetPart.Position
-
-    -- Enhanced movement prediction for mobile
-    if predictMovement and humanoidRootPart then
-        local distance = (epos - spos).Magnitude
-        local travelTime = distance / (throwPower * 5)
-        local velocity = humanoidRootPart.Velocity
-        
-        -- Mobile-specific prediction adjustment
-        if isMobile then
-            travelTime = travelTime * mobileSensitivity
-        end
-        
-        epos = epos + (velocity * travelTime)
-    end
-
-    local velocity = (epos - spos).Unit * ((spos - epos).Magnitude * throwPower)
     
     pcall(function()
-        InvokeServer("attemptPurchaseAmmo", "Banana Peel")
+        FireServer("equip", banana.guid)
     end)
     
-    hackthrow(LocalPlayer, "Banana Peel", item.guid, velocity, epos)
-
-    if getgenv().throwargs then
-        getgenv().throwargs[3] = targetPart
-        pcall(function()
-            InvokeServer(unpack(getgenv().throwargs))
-        end)
+    local targetPos = GetTargetPosition(targetChar)
+    local startPos = Character.RightHand.Position
+    
+    if Config.PredictMovement then
+        local distance = (targetPos - startPos).Magnitude
+        local travelTime = distance / (Config.ThrowPower * 5)
+        targetPos = PredictPosition(targetChar, travelTime)
     end
+    
+    local distance = (targetPos - startPos).Magnitude
+    local direction = (targetPos - startPos).Unit
+    local velocity = direction * (distance * Config.ThrowPower)
+    
+    local success = pcall(function()
+        local throwGuid = GUID()
+        return InvokeServer("throwSticky", throwGuid, "Banana Peel", banana.guid, velocity, targetPos)
+    end)
+    
+    if success then
+        LastThrowTime = tick()
+        return true
+    end
+    
+    return false
 end
 
--- Main Loop
-local lastThrowTime = 0
-local throwCooldown = 0.5
+function executeTestThrow()
+    local target = FindBestTarget()
+    if target then
+        ThrowBananaAtTarget(target)
+        print("Test throw executed")
+    else
+        print("No target found for test throw")
+    end
+end
+-- Banana Blaster Script - Part 6/6
+-- Main Loop and Event Handlers
 
+-- Main loop
 RunService.Heartbeat:Connect(function()
-    if not bladeaura or not HumanoidRootPart then return end
+    if not Config.Enabled or not HumanoidRootPart then return end
     
-    local currentTime = tick()
-    if currentTime - lastThrowTime < throwCooldown then return end
-    
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then continue end
-        
-        local char = plr.Character
-        if not char then continue end
-        
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local head = char:FindFirstChild("Head")
-        local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
-        
-        if not hum or hum.Health <= 0 then continue end
-        
-        local targetPart = humanoidRootPart or head
-        if not targetPart then continue end
-        
-        local dist = (HumanoidRootPart.Position - targetPart.Position).Magnitude
-        if dist < throwDistance then
-            executebladekill(plr, char)
-            lastThrowTime = currentTime
-            break
-        end
+    local target = FindBestTarget()
+    if target then
+        ThrowBananaAtTarget(target)
     end
 end)
 
--- Manual Throw (PC)
-if not isMobile then
-    UserInputService.InputBegan:Connect(function(input)
-        if input.KeyCode == Enum.KeyCode.F then
-            local closestTarget = findClosestTarget(HumanoidRootPart.Position, throwDistance)
-            if closestTarget then
-                local targetChar = getCharacterFromPosition(closestTarget)
-                if targetChar then
-                    executebladekill(nil, targetChar)
-                end
-            end
-        end
+-- Manual throw
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F then
+        executeTestThrow()
+    end
+end)
+
+-- Mobile touch
+if isMobile then
+    UserInputService.TouchStarted:Connect(function(touch, gameProcessed)
+        if gameProcessed then return end
+        task.spawn(function()
+            wait(0.1)
+            executeTestThrow()
+        end)
     end)
 end
 
-print("🍌 Banana Blaster Script Loaded Successfully!")
-print("📱 Mobile Mode:", isMobile and "ENABLED" or "DISABLED")
-if isMobile then
-    print("✅ Mobile Fix: Sliders should work now")
-    print("👆 Mobile Controls: Tap screen to throw")
-    print("📏 Swipe Controls: Drag and release to aim")
-else
-    print("🎮 PC Controls: Press F to throw")
-end
-print("⚙️ Settings: Open UI menu to adjust")
+-- Character respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+end)
+
+print("✅ Banana Blaster Loaded!")
+print("📱 Mobile:", isMobile and "Yes" or "No")
+print("🎮 Press F to test throw")
+print("⚙️ Open menu to configure")
