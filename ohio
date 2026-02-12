@@ -1,17 +1,17 @@
-Players = cloneref(game:GetService("Players"))
-RunService = cloneref(game:GetService("RunService"))
-ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
-LocalPlayer = Players.LocalPlayer
-Character = LocalPlayer.Character
-Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+-- ===== 1. 初始化 =====
+local Players = cloneref(game:GetService("Players"))
+local RunService = cloneref(game:GetService("RunService"))
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character
+local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
 
 LocalPlayer.CharacterAdded:Connect(function(char)
     Character = char
     HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
     Humanoid = char:WaitForChild("Humanoid")
-end)
-
+end)-- ===== 2. UI界面 =====
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
 local Window = WindUI:CreateWindow({
     Title = "香蕉追踪",
@@ -32,7 +32,7 @@ Tab:Select()
 
 local BananaAura = false
 local TrackSpeed = 15
-local ThrowDelay = 1.5  -- 减慢投掷频率，节省钱
+local ThrowDelay = 1.5
 
 Tab:Toggle({
     Title = "Banana Track Aura",
@@ -62,19 +62,28 @@ Tab:Slider({
     Callback = function(value)
         ThrowDelay = value
     end,
-})
-
-load = require(ReplicatedStorage.devv).load
-Signal = load("Signal")
-FireServer = Signal.FireServer
-InvokeServer = Signal.InvokeServer
-GUID = load("GUID")
-v3item = load("v3item")
-Raycast = load("Raycast")
+})-- ===== 3. 远程加载 =====
+local load = require(ReplicatedStorage.devv).load
+local Signal = load("Signal")
+local FireServer = Signal.FireServer
+local InvokeServer = Signal.InvokeServer
+local GUID = load("GUID")
+local v3item = load("v3item")
+local Raycast = load("Raycast")
 local inventory = v3item.inventory
 
--- 追踪扔香蕉
-hackthrow = function(plr, itemname, itemguid, velocity, epos)
+local getinventory = function()
+    return inventory.items
+end
+
+local finditem = function(string)
+    for guid, data in next, getinventory() do
+        if data.name == string or data.type == string or data.subtype == string then
+            return data
+        end
+    end
+end-- ===== 4. 投掷核心 =====
+local hackthrow = function(plr, itemname, itemguid, velocity, epos)
     if plr ~= LocalPlayer then return end
     task.spawn(function()
         local throwGuid = GUID()
@@ -119,40 +128,22 @@ hackthrow = function(plr, itemname, itemguid, velocity, epos)
             if dummyPart.Parent then dummyPart:Destroy() end
         end
     end)
-end
-
-getinventory = function()
-    return inventory.items
-end
-
-finditem = function(string)
-    for guid, data in next, getinventory() do
-        if data.name == string or data.type == string or data.subtype == string then
-            return data
-        end
-    end
-end
-
+end-- ===== 5. 购买系统 =====
 local function buyBanana()
-    -- 只在没有香蕉皮时才购买
     if not finditem("Banana Peel") then
         task.spawn(InvokeServer, "attemptPurchase", "Banana Peel")
     end
 end
 
 local function buyAmmo()
-    -- 减少购买弹药频率
-    if math.random(1, 3) == 1 then  -- 30%概率购买弹药
+    if math.random(1, 3) == 1 then
         task.spawn(InvokeServer, "attemptPurchaseAmmo", "Banana Peel")
     end
-end
-
--- ===== 香蕉皮追踪光环 =====
+end-- ===== 6. 追踪光环 =====
 local currentTarget = nil
 local lastThrowTime = 0
 
-executebladekill = function(plr, head)
-    -- 排除自己
+local function executebladekill(plr, head)
     if plr == LocalPlayer then return end
     
     local item = finditem("Banana Peel")
@@ -171,7 +162,6 @@ executebladekill = function(plr, head)
         
         local spos = rightHand.Position
         local epos = targetRoot.Position
-        
         local direction = (epos - spos).Unit
         local distance = (spos - epos).Magnitude
         local velocity = direction * (distance * TrackSpeed / 5)
@@ -186,13 +176,10 @@ executebladekill = function(plr, head)
     else
         buyBanana()
     end
-end
-
--- 立即追踪，无延迟
+end-- ===== 7. 主循环 =====
 RunService.Heartbeat:Connect(function()
     if BananaAura and HumanoidRootPart and LocalPlayer.Character then
         
-        -- 优先攻击当前目标
         if currentTarget then
             local char = currentTarget.Character
             if char then
@@ -203,7 +190,6 @@ RunService.Heartbeat:Connect(function()
                 if hum and hum.Health > 0 and head and root then
                     local dist = (HumanoidRootPart.Position - head.Position).Magnitude
                     if dist < 190 then
-                        -- 检查投掷冷却
                         if tick() - lastThrowTime >= ThrowDelay then
                             executebladekill(currentTarget, head)
                             lastThrowTime = tick()
@@ -214,7 +200,6 @@ RunService.Heartbeat:Connect(function()
             end
         end
         
-        -- 找新目标（排除自己）
         currentTarget = nil
         local closestDist = 190
         local closestPlayer = nil
@@ -222,4 +207,39 @@ RunService.Heartbeat:Connect(function()
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
- 
+                local head = plr.Character:FindFirstChild("Head")
+                local root = plr.Character:FindFirstChild("HumanoidRootPart")
+                
+                if hum and hum.Health > 0 and head and root then
+                    local dist = (HumanoidRootPart.Position - head.Position).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        closestPlayer = plr
+                    end
+                end
+            end
+        end
+        
+        if closestPlayer then
+            currentTarget = closestPlayer
+            if tick() - lastThrowTime >= ThrowDelay then
+                local head = closestPlayer.Character:FindFirstChild("Head")
+                if head then
+                    executebladekill(closestPlayer, head)
+                    lastThrowTime = tick()
+                end
+            end
+        end
+    end
+end)-- ===== 8. 自动购买 =====
+task.spawn(function()
+    while task.wait(3.0) do
+        if BananaAura then
+            pcall(function()
+                if not finditem("Banana Peel") then
+                    InvokeServer("attemptPurchase", "Banana Peel")
+                end
+            end)
+        end
+    end
+end)
