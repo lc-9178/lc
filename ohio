@@ -1,0 +1,285 @@
+-- Banana Blaster Script - Part 1/3
+-- Services and Initialization
+
+Players = cloneref(game:GetService("Players"))
+RunService = cloneref(game:GetService("RunService"))
+ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
+LocalPlayer = Players.LocalPlayer
+
+-- Character Setup
+local Character = LocalPlayer.Character
+local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+    Humanoid = char:WaitForChild("Humanoid")
+end)
+
+-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
+local Window = WindUI:CreateWindow({
+    Title = "Banana Blaster",
+    OpenButton = {
+        Title = "Open Menu",
+        CornerRadius = UDim.new(0, 16),
+        StrokeThickness = 3,
+        Color = ColorSequence.new(Color3.fromHex("f9a8d4")),
+        OnlyMobile = false,
+        Enabled = true,
+        Draggable = true,
+        Scale = 0.5,
+    },
+})
+
+local Tab = Window:Tab({Title = "Main"})
+Tab:Select()
+
+-- Configuration
+local bladeaura = false
+local throwDistance = 190
+local throwPower = 15
+local predictMovement = true
+-- Banana Blaster Script - Part 2/3
+-- UI Elements
+
+-- UI Controls
+Tab:Toggle({
+    Title = "Blade Aura",
+    Callback = function(state)
+        bladeaura = state
+        print("Blade Aura:", state and "ON" or "OFF")
+    end,
+})
+
+Tab:Slider({
+    Title = "Throw Distance",
+    Min = 50,
+    Max = 250,
+    Default = 190,
+    Callback = function(value)
+        throwDistance = value
+        print("Throw Distance:", value)
+    end,
+})
+
+Tab:Slider({
+    Title = "Throw Power",
+    Min = 10,
+    Max = 25,
+    Default = 15,
+    Callback = function(value)
+        throwPower = value
+        print("Throw Power:", value)
+    end,
+})
+
+Tab:Toggle({
+    Title = "Predict Movement",
+    Default = true,
+    Callback = function(state)
+        predictMovement = state
+        print("Movement Prediction:", state and "ON" or "OFF")
+    end,
+})
+
+-- Game Modules
+load = require(ReplicatedStorage.devv).load
+Signal = load("Signal")
+FireServer = Signal.FireServer
+InvokeServer = Signal.InvokeServer
+GUID = load("GUID")
+v3item = load("v3item")
+local inventory = v3item.inventory
+-- Banana Blaster Script - Part 3/3
+-- Core Functions
+
+-- Throw Function
+hackthrow = function(plr, itemname, itemguid, velocity, epos)
+    if plr ~= LocalPlayer then return end
+    
+    task.spawn(function()
+        local throwGuid = GUID()
+        local success, stickyId = pcall(function()
+            return InvokeServer("throwSticky", throwGuid, itemname, itemguid, velocity, epos)
+        end)
+        
+        if not success then return end
+        
+        local dummyPart = Instance.new("Part")
+        dummyPart.Size = Vector3.new(2, 2, 2)
+        dummyPart.Position = epos
+        dummyPart.Anchored = true
+        dummyPart.Transparency = 1
+        dummyPart.CanCollide = true
+        dummyPart.Parent = workspace
+        
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+        rayParams.FilterDescendantsInstances = { plr.Character, workspace.Game.Local, workspace.Game.Drones }
+        
+        local dist = (epos - plr.Character.Head.Position).Magnitude
+        local rayResult = workspace:Raycast(
+            plr.Character.Head.Position,
+            (epos - plr.Character.Head.Position).Unit * (dist + 5),
+            rayParams
+        )
+        
+        if rayResult and rayResult.Instance then
+            local hitPart = rayResult.Instance
+            local relativeHitCFrame = hitPart.CFrame:ToObjectSpace(CFrame.new(rayResult.Position, rayResult.Position + rayResult.Normal))
+            local stickyCFrame = CFrame.new(rayResult.Position)
+            
+            if dummyPart.Parent then dummyPart:Destroy() end
+            
+            getgenv().throwargs = {
+                "hitSticky",
+                stickyId or throwGuid,
+                hitPart,
+                relativeHitCFrame,
+                stickyCFrame,
+            }
+            
+            pcall(function()
+                InvokeServer("hitSticky", stickyId or throwGuid, hitPart, relativeHitCFrame, stickyCFrame)
+            end)
+        else
+            if dummyPart.Parent then dummyPart:Destroy() end
+        end
+    end)
+end
+
+-- Inventory Functions
+getinventory = function()
+    return inventory and inventory.items or {}
+end
+
+finditem = function(string)
+    for guid, data in next, getinventory() do
+        if data.name == string or data.type == string or data.subtype == string then
+            return data
+        end
+    end
+    return nil
+end
+
+-- Main Throw Logic
+executebladekill = function(plr, targetChar)
+    local item = finditem("Banana Peel")
+    if not item then
+        pcall(function()
+            InvokeServer("attemptPurchase", "Banana Peel")
+        end)
+        return
+    end
+
+    pcall(function()
+        FireServer("equip", item.guid)
+    end)
+
+    local head = targetChar:FindFirstChild("Head")
+    local humanoidRootPart = targetChar:FindFirstChild("HumanoidRootPart")
+    
+    if not head and not humanoidRootPart then return end
+
+    local targetPart = humanoidRootPart or head
+    local spos = LocalPlayer.Character.RightHand.Position
+    local epos = targetPart.Position
+
+    -- Movement Prediction
+    if predictMovement and humanoidRootPart then
+        local distance = (epos - spos).Magnitude
+        local travelTime = distance / (throwPower * 5)
+        local velocity = humanoidRootPart.Velocity
+        epos = epos + (velocity * travelTime)
+    end
+
+    local velocity = (epos - spos).Unit * ((spos - epos).Magnitude * throwPower)
+    
+    pcall(function()
+        InvokeServer("attemptPurchaseAmmo", "Banana Peel")
+    end)
+    
+    hackthrow(LocalPlayer, "Banana Peel", item.guid, velocity, epos)
+
+    if getgenv().throwargs then
+        getgenv().throwargs[3] = targetPart
+        pcall(function()
+            InvokeServer(unpack(getgenv().throwargs))
+        end)
+    end
+end
+
+-- Main Loop
+local lastThrowTime = 0
+local throwCooldown = 0.5
+
+RunService.Heartbeat:Connect(function()
+    if not bladeaura or not HumanoidRootPart then return end
+    
+    local currentTime = tick()
+    if currentTime - lastThrowTime < throwCooldown then return end
+    
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        
+        local char = plr.Character
+        if not char then continue end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local head = char:FindFirstChild("Head")
+        local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+        
+        if not hum or hum.Health <= 0 then continue end
+        
+        local targetPart = humanoidRootPart or head
+        if not targetPart then continue end
+        
+        local dist = (HumanoidRootPart.Position - targetPart.Position).Magnitude
+        if dist < throwDistance then
+            executebladekill(plr, char)
+            lastThrowTime = currentTime
+            break
+        end
+    end
+end)
+
+-- Manual Throw
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F then
+        local closestTarget = nil
+        local closestDistance = math.huge
+        
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr == LocalPlayer then continue end
+            
+            local char = plr.Character
+            if not char then continue end
+            
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            local head = char:FindFirstChild("Head")
+            local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+            
+            if hum and hum.Health > 0 then
+                local targetPart = humanoidRootPart or head
+                if targetPart then
+                    local dist = (HumanoidRootPart.Position - targetPart.Position).Magnitude
+                    if dist < closestDistance then
+                        closestDistance = dist
+                        closestTarget = char
+                    end
+                end
+            end
+        end
+        
+        if closestTarget then
+            executebladekill(nil, closestTarget)
+        end
+    end
+end)
+
+print("🍌 Banana Blaster Script Loaded Successfully!")
+print("🎯 Auto Throw: Toggle in UI")
+print("🎮 Manual Throw: Press F key")
+print("⚙️ Settings: Adjust in UI menu")
