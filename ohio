@@ -1,139 +1,259 @@
--- Banana Blaster Script - Part 1/6
--- Base Setup and UI Library
-
+-- ===== 第一部分：初始化 + Ohio专用绕过功能（全自动开启，无UI）=====
 Players = cloneref(game:GetService("Players"))
 RunService = cloneref(game:GetService("RunService"))
 ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
-UserInputService = cloneref(game:GetService("UserInputService"))
+LocalPlayer = Players.LocalPlayer
+Character = LocalPlayer.Character
+Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
 
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
+    Humanoid = char:WaitForChild("Humanoid")
+end)
 
-local isMobile = UserInputService.TouchEnabled
-
--- Load WindUI Library
+-- ===== 绕过功能（一执行就打开，永远运行）=====
+task.spawn(function()
+    -- 反布娃娃状态（防止僵直）
+    task.spawn(function()
+        while task.wait(1) do
+            pcall(function()
+                require(ReplicatedStorage.devv).load("Signal").FireServer("setRagdoll", false)
+            end)
+        end
+    end)
+    
+    -- 反坐下状态
+    task.spawn(function()
+        LocalPlayer.CharacterAdded:Connect(function(char)
+            task.wait(0.5)
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then hum.Sit = false end
+        end)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.Sit = false
+        end
+    end)
+    
+    -- 防shadowban检测（清除封禁数据）
+    task.spawn(function()
+        local gc = getgc(true)
+        for _, v in ipairs(gc) do
+            if type(v) == "table" then
+                pcall(function()
+                    if rawget(v, "shadowbanned") ~= nil then rawset(v, "shadowbanned", nil) end
+                    if rawget(v, "numshadowbans") ~= nil then rawset(v, "numshadowbans", 0) end
+                    if rawget(v, "shadowbannedAt") ~= nil then rawset(v, "shadowbannedAt", nil) end
+                    if rawget(v, "shadowbannedExpires") ~= nil then rawset(v, "shadowbannedExpires", nil) end
+                end)
+            end
+        end
+    end)
+    
+    -- 忽略好友检测
+    task.spawn(function()
+        LocalPlayer.IsFriendsWith = function(self, userId) return false end
+    end)
+end)-- ===== 第二部分：WindUI界面 + 香蕉皮杀戮光环开关 =====
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/454244513/WindUIFix/refs/heads/main/main.lua"))()
-
 local Window = WindUI:CreateWindow({
-    Title = "Banana Blaster" .. (isMobile and " 📱" or ""),
+    Title = "nine team | Ohio",
     OpenButton = {
-        Title = "Open Menu",
-        CornerRadius = UDim.new(0, 12),
+        Title = "nine team",
+        CornerRadius = UDim.new(0, 16),
         StrokeThickness = 3,
-        Color = ColorSequence.new(Color3.fromHex("f9a8d4")),
+        Color = ColorSequence.new(Color3.fromHex("7aa2f7"), Color3.fromHex("7aa2f7")),
         OnlyMobile = false,
         Enabled = true,
         Draggable = true,
-        Scale = isMobile and 0.7 or 0.5,
+        Scale = 0.5,
     },
 })
 
-local MainTab = Window:Tab({Title = "Main"})
-MainTab:Select()
+-- 香蕉皮杀戮光环标签页
+local KillTab = Window:Tab({ Title = "kill aura" })
+KillTab:Select()
+KillTab:Toggle({ Title = "Banana Aura", Callback = function(state) bladeaura = state end })-- ===== 第三部分：透视ESP（Ohio专用血条显示）=====
+local PlayerTab = Window:Tab({ Title = "玩家" })
 
-local Config = {
-    Enabled = false,
-    ThrowDistance = 150,
-    ThrowPower = 20,
-    PredictMovement = true,
-    Cooldown = 0.8
-}
--- Banana Blaster Script - Part 2/6
--- Main Tab UI
+PlayerTab:Button({ Title = "透视ESP", Callback = function()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local LocalPlayer = Players.LocalPlayer
+    local LocalCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local LocalHead = LocalCharacter:WaitForChild("Head")
+    local playerConnections = {}
 
-MainTab:Toggle({
-    Title = "Blade Aura",
-    Callback = function(state)
-        Config.Enabled = state
-        print("Blade Aura:", state and "ON" or "OFF")
-    end
-})
-
-MainTab:Slider({
-    Title = "Throw Distance",
-    Min = 50,
-    Max = 250,
-    Default = 150,
-    Callback = function(value)
-        Config.ThrowDistance = value
-        print("Distance:", value)
-    end
-})
-
-MainTab:Slider({
-    Title = "Throw Power",
-    Min = 10,
-    Max = 30,
-    Default = 20,
-    Callback = function(value)
-        Config.ThrowPower = value
-        print("Power:", value)
-    end
-})
-
-MainTab:Toggle({
-    Title = "Predict Movement",
-    Default = true,
-    Callback = function(state)
-        Config.PredictMovement = state
-        print("Prediction:", state and "ON" or "OFF")
-    end
-})
-
-MainTab:Button({
-    Title = "Test Throw",
-    Callback = function()
-        executeTestThrow()
-    end
-})
--- Banana Blaster Script - Part 3/6
--- Game Modules
-
-local success, devv = pcall(function()
-    return require(ReplicatedStorage.devv)
-end)
-
-if not success then
-    warn("Failed to load game modules")
-    return
-end
-
-local Signal = devv.load("Signal")
-local GUID = devv.load("GUID")
-local v3item = devv.load("v3item")
-
-local FireServer = Signal.FireServer
-local InvokeServer = Signal.InvokeServer
-local inventory = v3item.inventory
-
--- Inventory functions
-getinventory = function()
-    return inventory and inventory.items or {}
-end
-
-finditem = function(string)
-    for guid, data in next, getinventory() do
-        if data.name == string then
-            return data
+    local function updateNametag(player, textLabel, head)
+        local character = player.Character
+        if not character then return end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local targetHead = character:FindFirstChild("Head")
+        if humanoid and targetHead and humanoid.Health > 0 then
+            local distance = (LocalHead.Position - targetHead.Position).Magnitude
+            textLabel.Text = string.format("%s\n❤️ %d/%d\n📏 %.1fm", player.Name, math.floor(humanoid.Health), math.floor(humanoid.MaxHealth), distance)
+            textLabel.Visible = true
+        else
+            textLabel.Visible = false
         end
     end
-    return nil
+
+    local function createNametag(player)
+        if player == LocalPlayer then return end
+        playerConnections[player] = {}
+        local function setupCharacter(character)
+            local head = character:WaitForChild("Head")
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "PlayerNametag"
+            billboard.Adornee = head
+            billboard.Size = UDim2.new(0, 200, 0, 80)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = head
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.Font = Enum.Font.GothamBold
+            textLabel.TextSize = 9
+            textLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
+            textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            textLabel.TextStrokeTransparency = 0.3
+            textLabel.BackgroundTransparency = 1
+            textLabel.TextYAlignment = Enum.TextYAlignment.Top
+            textLabel.Parent = billboard
+            local heartbeatConn = RunService.Heartbeat:Connect(function()
+                if not character or not character.Parent then heartbeatConn:Disconnect() return end
+                updateNametag(player, textLabel, head)
+            end)
+            table.insert(playerConnections[player], heartbeatConn)
+            local characterRemovedConn = character.AncestryChanged:Connect(function(_, parent)
+                if parent == nil then
+                    billboard:Destroy()
+                    heartbeatConn:Disconnect()
+                    characterRemovedConn:Disconnect()
+                end
+            end)
+            table.insert(playerConnections[player], characterRemovedConn)
+        end
+        if player.Character then setupCharacter(player.Character) end
+        local charAddedConn = player.CharacterAdded:Connect(setupCharacter)
+        table.insert(playerConnections[player], charAddedConn)
+    end
+
+    local function removeNametag(player)
+        if playerConnections[player] then
+            for _, conn in ipairs(playerConnections[player]) do conn:Disconnect() end
+            playerConnections[player] = nil
+        end
+        if player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                local nametag = head:FindFirstChild("PlayerNametag")
+                if nametag then nametag:Destroy() end
+            end
+        end
+    end
+
+    Players.PlayerAdded:Connect(function(player)
+        createNametag(player)
+        local leavingConn = player.AncestryChanged:Connect(function(_, parent)
+            if parent == nil then removeNametag(player) leavingConn:Disconnect() end
+        end)
+    end)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            createNametag(player)
+            local leavingConn = player.AncestryChanged:Connect(function(_, parent)
+                if parent == nil then removeNametag(player) leavingConn:Disconnect() end
+            end)
+        end
+    end
+
+    LocalPlayer.CharacterAdded:Connect(function(character)
+        LocalCharacter = character
+        LocalHead = character:WaitForChild("Head")
+    end)
+end})-- ===== 第四部分：加速功能 + 连跳 =====
+local speed = 1
+local tpEnabled = false
+local heartbeatConnection = nil
+local character, humanoid
+
+local function setupCharacter()
+    character = LocalPlayer.Character
+    if character then
+        humanoid = character:WaitForChild("Humanoid")
+        humanoid.Died:Connect(function()
+            repeat task.wait() until LocalPlayer.Character ~= nil
+            setupCharacter()
+            if tpEnabled then startTPWalk() end
+        end)
+    end
 end
--- Banana Blaster Script - Part 4/6
--- Throw Functions
+
+local function startTPWalk()
+    if heartbeatConnection then heartbeatConnection:Disconnect() end
+    heartbeatConnection = RunService.Heartbeat:Connect(function()
+        if not tpEnabled or not character or not humanoid or humanoid.Health <= 0 then return end
+        if humanoid.MoveDirection.Magnitude > 0 then
+            local currentCFrame = character.PrimaryPart.CFrame
+            local newPosition = currentCFrame.Position + (humanoid.MoveDirection * speed)
+            character:SetPrimaryPartCFrame(CFrame.new(newPosition) * currentCFrame.Rotation)
+        end
+    end)
+end
+
+local function stopTPWalk()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    setupCharacter()
+end)
+setupCharacter()
+
+PlayerTab:Slider({ Title = "加速设置", Min = 1, Max = 15, Default = 1, Callback = function(value) speed = value end })
+PlayerTab:Toggle({ Title = "速度开关", Callback = function(value)
+    tpEnabled = value
+    if value then startTPWalk() else stopTPWalk() end
+end})
+
+-- 连跳
+local jumpConnection
+PlayerTab:Toggle({ Title = "连跳", Callback = function(value)
+    if value then
+        jumpConnection = game:GetService("UserInputService").JumpRequest:Connect(function()
+            if humanoid and humanoid.Health > 0 then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    else
+        if jumpConnection then
+            jumpConnection:Disconnect()
+            jumpConnection = nil
+        end
+    end
+end})-- ===== 第五部分：加载远程 + 香蕉皮攻击核心逻辑 =====
+load = require(ReplicatedStorage.devv).load
+Signal = load("Signal")
+FireServer = Signal.FireServer
+InvokeServer = Signal.InvokeServer
+GUID = load("GUID")
+v3item = load("v3item")
+Raycast = load("Raycast")
+local inventory = v3item.inventory
 
 hackthrow = function(plr, itemname, itemguid, velocity, epos)
     if plr ~= LocalPlayer then return end
-    
     task.spawn(function()
         local throwGuid = GUID()
-        local success, stickyId = pcall(function()
-            return InvokeServer("throwSticky", throwGuid, itemname, itemguid, velocity, epos)
-        end)
-        
+        local success, stickyId = InvokeServer("throwSticky", throwGuid, itemname, itemguid, velocity, epos)
         if not success then return end
-        
         local dummyPart = Instance.new("Part")
         dummyPart.Size = Vector3.new(2, 2, 2)
         dummyPart.Position = epos
@@ -141,25 +261,20 @@ hackthrow = function(plr, itemname, itemguid, velocity, epos)
         dummyPart.Transparency = 1
         dummyPart.CanCollide = true
         dummyPart.Parent = workspace
-        
         local rayParams = RaycastParams.new()
         rayParams.FilterType = Enum.RaycastFilterType.Blacklist
         rayParams.FilterDescendantsInstances = { plr.Character, workspace.Game.Local, workspace.Game.Drones }
-        
         local dist = (epos - plr.Character.Head.Position).Magnitude
         local rayResult = workspace:Raycast(
             plr.Character.Head.Position,
             (epos - plr.Character.Head.Position).Unit * (dist + 5),
             rayParams
         )
-        
         if rayResult and rayResult.Instance then
             local hitPart = rayResult.Instance
             local relativeHitCFrame = hitPart.CFrame:ToObjectSpace(CFrame.new(rayResult.Position, rayResult.Position + rayResult.Normal))
             local stickyCFrame = CFrame.new(rayResult.Position)
-            
             if dummyPart.Parent then dummyPart:Destroy() end
-            
             getgenv().throwargs = {
                 "hitSticky",
                 stickyId or throwGuid,
@@ -167,154 +282,72 @@ hackthrow = function(plr, itemname, itemguid, velocity, epos)
                 relativeHitCFrame,
                 stickyCFrame,
             }
-            
-            pcall(function()
-                InvokeServer("hitSticky", stickyId or throwGuid, hitPart, relativeHitCFrame, stickyCFrame)
-            end)
+            InvokeServer("hitSticky", stickyId or throwGuid, hitPart, relativeHitCFrame, stickyCFrame)
         else
             if dummyPart.Parent then dummyPart:Destroy() end
         end
     end)
 end
 
-function GetTargetPosition(targetChar)
-    local rootPart = targetChar:FindFirstChild("HumanoidRootPart")
-    local torso = targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
-    
-    if rootPart then
-        return rootPart.Position
-    elseif torso then
-        return torso.Position
-    else
-        local head = targetChar:FindFirstChild("Head")
-        return head and head.Position or targetChar:GetPivot().Position
-    end
-end
+getinventory = function() return inventory.items end
 
-function PredictPosition(targetChar, travelTime)
-    local rootPart = targetChar:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return GetTargetPosition(targetChar) end
-    
-    return rootPart.Position + (rootPart.Velocity * travelTime)
-end
--- Banana Blaster Script - Part 5/6
--- Target Finding and Throw Logic
-
-function FindBestTarget()
-    local bestTarget = nil
-    local bestDistance = math.huge
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        
-        local char = player.Character
-        if not char then continue end
-        
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then continue end
-        
-        local targetPos = GetTargetPosition(char)
-        local distance = (HumanoidRootPart.Position - targetPos).Magnitude
-        
-        if distance <= Config.ThrowDistance and distance < bestDistance then
-            bestTarget = char
-            bestDistance = distance
+finditem = function(string)
+    for guid, data in next, getinventory() do
+        if data.name == string or data.type == string or data.subtype == string then
+            return data
         end
     end
-    
-    return bestTarget
-end
+end-- ===== 第六部分：香蕉皮杀戮光环（锁定一个目标直到倒下）=====
+local currentTarget = nil
 
-local LastThrowTime = 0
-
-function ThrowBananaAtTarget(targetChar)
-    if tick() - LastThrowTime < Config.Cooldown then return false end
-    
-    local banana = finditem("Banana Peel")
-    if not banana then
-        pcall(function()
-            InvokeServer("attemptPurchase", "Banana Peel")
-        end)
-        return false
-    end
-    
-    pcall(function()
-        FireServer("equip", banana.guid)
-    end)
-    
-    local targetPos = GetTargetPosition(targetChar)
-    local startPos = Character.RightHand.Position
-    
-    if Config.PredictMovement then
-        local distance = (targetPos - startPos).Magnitude
-        local travelTime = distance / (Config.ThrowPower * 5)
-        targetPos = PredictPosition(targetChar, travelTime)
-    end
-    
-    local distance = (targetPos - startPos).Magnitude
-    local direction = (targetPos - startPos).Unit
-    local velocity = direction * (distance * Config.ThrowPower)
-    
-    local success = pcall(function()
-        local throwGuid = GUID()
-        return InvokeServer("throwSticky", throwGuid, "Banana Peel", banana.guid, velocity, targetPos)
-    end)
-    
-    if success then
-        LastThrowTime = tick()
-        return true
-    end
-    
-    return false
-end
-
-function executeTestThrow()
-    local target = FindBestTarget()
-    if target then
-        ThrowBananaAtTarget(target)
-        print("Test throw executed")
+executebladekill = function(plr, head)
+    local item = finditem("Banana Peel")
+    if item then
+        FireServer("equip", item.guid)
+        if not getgenv().throwargs then
+            local spos = LocalPlayer.Character.RightHand.Position
+            local epos = plr.Character.HumanoidRootPart.Position
+            local velocity = (epos - spos).Unit * ((spos - epos).Magnitude * 15)
+            task.spawn(InvokeServer, "attemptPurchaseAmmo", "Banana Peel")
+            hackthrow(LocalPlayer, "Banana Peel", item.guid, velocity, epos)
+        end
+        if getgenv().throwargs then
+            getgenv().throwargs[3] = head
+            task.spawn(InvokeServer, unpack(getgenv().throwargs))
+        end
     else
-        print("No target found for test throw")
+        task.spawn(InvokeServer, "attemptPurchase", "Banana Peel")
     end
 end
--- Banana Blaster Script - Part 6/6
--- Main Loop and Event Handlers
 
--- Main loop
 RunService.Heartbeat:Connect(function()
-    if not Config.Enabled or not HumanoidRootPart then return end
-    
-    local target = FindBestTarget()
-    if target then
-        ThrowBananaAtTarget(target)
+    if bladeaura and HumanoidRootPart then
+        if currentTarget then
+            local char = currentTarget.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local head = char and char:FindFirstChild("Head")
+            if hum and hum.Health > 0 and head then
+                local dist = (HumanoidRootPart.Position - head.Position).Magnitude
+                if dist < 190 then
+                    executebladekill(currentTarget, head)
+                    return
+                end
+            end
+        end
+        currentTarget = nil
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr == LocalPlayer then continue end
+            local char = plr.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local head = char and char:FindFirstChild("Head")
+            if hum and hum.Health > 0 and head then
+                local dist = (HumanoidRootPart.Position - head.Position).Magnitude
+                if dist < 190 then
+                    currentTarget = plr
+                    executebladekill(plr, head)
+                    break
+                end
+            end
+        end
     end
 end)
-
--- Manual throw
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.F then
-        executeTestThrow()
-    end
-end)
-
--- Mobile touch
-if isMobile then
-    UserInputService.TouchStarted:Connect(function(touch, gameProcessed)
-        if gameProcessed then return end
-        task.spawn(function()
-            wait(0.1)
-            executeTestThrow()
-        end)
-    end)
-end
-
--- Character respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    Character = char
-    HumanoidRootPart = char:WaitForChild("HumanoidRootPart")
-end)
-
-print("✅ Banana Blaster Loaded!")
-print("📱 Mobile:", isMobile and "Yes" or "No")
-print("🎮 Press F to test throw")
-print("⚙️ Open menu to configure")
